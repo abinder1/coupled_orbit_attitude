@@ -1,6 +1,10 @@
+% Copyright (c) 2026 Andrew Binder
+
 %% Script setup
-clear; clc; close('all');
-addpath(genpath('./utilities'))
+clear;
+clc;
+close('all');
+addpath(genpath('./utilities'));
 
 ode_opts = odeset('AbsTol', 1e-12, 'RelTol', 1e-12);
 
@@ -18,18 +22,14 @@ V = sqrt(mu_e / R);  % Speed of tether C.o.M.'s orbit
 xs = m2 * L / (m1 + m2);
 
 lhat_0 = [1; 0; 0];
-
-counterweight_relative_position = lhat_0 * (-xs);
-catchmech_relative_position = lhat_0 * (L - xs);
-
 omv = [0; 0; omega];
 
-counterweight_delta_state = [counterweight_relative_position; cross(omv, counterweight_relative_position)];
-catchmech_delta_state = [catchmech_relative_position; cross(omv, catchmech_relative_position)];
+counterweight_delta_state = [lhat_0 * (-xs); cross(omv, lhat_0 * (-xs))];
+catchmech_delta_state = [lhat_0 * (L - xs); cross(omv, lhat_0 * (L - xs))];
 
 tether_com_IC = [R; 0; 0; 0; V; 0];
 
-cw_IC = tether_com_IC - counterweight_delta_state; 
+cw_IC = tether_com_IC - counterweight_delta_state;
 cm_IC = tether_com_IC - catchmech_delta_state;
 pl_IC = cm_IC;
 
@@ -58,7 +58,7 @@ total_IC_nd(10:18) = total_IC_nd(10:18) / V_star;
 sv_0 = [total_IC_nd; reshape(eye(18), [324, 1])];
 
 %% Check Jacobian of the dynamics with finite differencing
-ode_func = @(tau, sv) constrained_gravity(tau, sv, mu_t);
+ode_func = @(tau, sv) constrainedGravity(tau, sv, mu_t);
 
 ref_sv_dot = ode_func(0, sv_0);
 DF_ref = reshape(ref_sv_dot(19:342), [18, 18]);
@@ -86,29 +86,42 @@ sol_struct = ode89(ode_func, [0, prop_time], sv_0, ode_opts);
 
 STM_f = reshape(sol_struct.y(19:342, end), [18, 18]);
 
-cw_pos = sol_struct.y(1:3, :); cm_pos = sol_struct.y(4:6, :); pl_pos = sol_struct.y(7:9, :);
+cw_pos = sol_struct.y(1:3, :);
+cm_pos = sol_struct.y(4:6, :);
+pl_pos = sol_struct.y(7:9, :);
 
-figure; hold on; grid on; axis equal;
-plot3(cw_pos(1, :) * L_star, cw_pos(2, :) * L_star, cw_pos(3, :) * L_star, 'k')
-plot3(cm_pos(1, :) * L_star, cm_pos(2, :) * L_star, cm_pos(3, :) * L_star, 'b')
-plot3(pl_pos(1, :) * L_star, pl_pos(2, :) * L_star, pl_pos(3, :) * L_star, 'r')
-scatter3(cw_pos(1, 1) * L_star, cw_pos(2, 1) * L_star, cw_pos(3, 1) * L_star, 'ks', 'filled')
-scatter3(cm_pos(1, 1) * L_star, cm_pos(2, 1) * L_star, cm_pos(3, 1) * L_star, 'bs', 'filled')
-scatter3(pl_pos(1, 1) * L_star, pl_pos(2, 1) * L_star, pl_pos(3, 1) * L_star, 'rs', 'filled')
+figure;
+hold on;
+grid on;
+axis equal;
+plot3(cw_pos(1, :) * L_star, cw_pos(2, :) * L_star, cw_pos(3, :) * L_star, 'k');
+plot3(cm_pos(1, :) * L_star, cm_pos(2, :) * L_star, cm_pos(3, :) * L_star, 'b');
+plot3(pl_pos(1, :) * L_star, pl_pos(2, :) * L_star, pl_pos(3, :) * L_star, 'r');
+scatter3(cw_pos(1, 1) * L_star, ...
+         cw_pos(2, 1) * L_star, ...
+         cw_pos(3, 1) * L_star, 'ks', 'filled');
+scatter3(cm_pos(1, 1) * L_star, ...
+         cm_pos(2, 1) * L_star, ...
+         cm_pos(3, 1) * L_star, 'bs', 'filled');
+scatter3(pl_pos(1, 1) * L_star, ...
+         pl_pos(2, 1) * L_star, ...
+         pl_pos(3, 1) * L_star, 'rs', 'filled');
 
 title_text = compose("The Last %d Seconds Before Catch", prop_time * T_star);
 
-title(title_text)
+title(title_text);
 
-xlabel("X-position [km]")
-ylabel("Y-position [km]")
-zlabel("Z-position [km]")
+xlabel("X-position [km]");
+ylabel("Y-position [km]");
+zlabel("Z-position [km]");
 
 legend("Counterweight", "Catch Mechanism", "Payload", ...
-       "CW IC", "CM IC", "PL IC", "Location", "best")
+       "CW IC", "CM IC", "PL IC", "Location", "best");
 
-figure; hold on; grid on;
-plot(sol_struct.x * T_star, vecnorm(cw_pos - cm_pos) * L_star)
+figure;
+hold on;
+grid on;
+plot(sol_struct.x * T_star, vecnorm(cw_pos - cm_pos) * L_star);
 
 dxf_dldot = STM_f * [zeros([9, 1]); lhat_0 / 2; -lhat_0 / 2; zeros([3, 1])];
 
@@ -131,20 +144,23 @@ final_state_minus = sol_struct.y(1:18, end);
 
 dxf_dldot_fd = (final_state_plus - final_state_minus) / 2 / fd_stepsize;
 
-abs(dxf_dldot - dxf_dldot_fd)
-
+abs(dxf_dldot - dxf_dldot_fd);
 
 %% Local function definition
-function sv_dot = constrained_gravity(~, sv, eta)
-    cw_pos = sv(1:3); cm_pos = sv(4:6); pl_pos = sv(7:9); 
-    cw_vel = sv(10:12); cm_vel = sv(13:15); pl_vel = sv(16:18);
+function sv_dot = constrainedGravity(~, sv, eta)
+    cw_pos = sv(1:3);
+    cm_pos = sv(4:6);
+    pl_pos = sv(7:9);
+    cw_vel = sv(10:12);
+    cm_vel = sv(13:15);
+    pl_vel = sv(16:18);
 
     stm = reshape(sv(19:342), [18, 18]);
 
     % Calculate the virtual accelerations of the two point masses
-    [cw_virt_accel, cw_A] = virtual_acceleration(cw_pos);
-    [cm_virt_accel, cm_A] = virtual_acceleration(cm_pos);
-    [pl_virt_accel, pl_A] = virtual_acceleration(pl_pos);
+    [cw_virt_accel, cw_A] = virtualAcceleration(cw_pos);
+    [cm_virt_accel, cm_A] = virtualAcceleration(cm_pos);
+    [pl_virt_accel, pl_A] = virtualAcceleration(pl_pos);
 
     % Construct relative quantities
     dv = cm_pos - cw_pos;
@@ -156,16 +172,18 @@ function sv_dot = constrained_gravity(~, sv, eta)
     qv = dot(dvd, dvd) / dot(dv, dv) * dv;
 
     % Construct constrained accelerations
-    O3 = zeros(3);  I3 = eye(3);
+    O3 = zeros(3);
+    I3 = eye(3);
 
     accel_scaling = [I3 - eta * D, eta * D, O3; ...
-                     (1 - eta) * D, I3 - (1 - eta)*D, O3; ...
+                     (1 - eta) * D, I3 - (1 - eta) * D, O3; ...
                      O3, O3, I3];
 
     combined_qv = [eta * qv; -(1 - eta) * qv; 0; 0; 0];
 
-    true_accels = accel_scaling * [cw_virt_accel; cm_virt_accel; pl_virt_accel] + combined_qv;
-    
+    virt_accels = [cw_virt_accel; cm_virt_accel; pl_virt_accel];
+    true_accels = accel_scaling * virt_accels + combined_qv;
+
     % Construct the system Jacobian
     Z1 = dot(dh, cw_virt_accel) * I3 + (dh * cw_virt_accel');
     Z2 = dot(dh, cm_virt_accel) * I3 + (dh * cm_virt_accel');
@@ -194,9 +212,9 @@ function sv_dot = constrained_gravity(~, sv, eta)
     sv_dot = [cw_vel; cm_vel; pl_vel; true_accels; stm_dot];
 end
 
-function [acc, Jac] = virtual_acceleration(pos)
+function [acc, jacobian] = virtualAcceleration(pos)
     rhat = pos / norm(pos);
 
     acc = -rhat / dot(pos, pos);
-    Jac = (3 * (rhat * rhat') - eye(3)) / dot(pos, pos)^(3/2);
+    jacobian = (3 * (rhat * rhat') - eye(3)) / dot(pos, pos)^(3 / 2);
 end
