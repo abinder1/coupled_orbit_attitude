@@ -12,10 +12,14 @@ slprj/
 
 # LaTeX build files
 *.aux
+*.bbl
+*.bcf
+*.blg
 *.log
 *.out
 *.toc
 *.fls
 *.fdb_latexmk
+*.run.xml
 *.synctex.gz
 derivations/*.pdf
