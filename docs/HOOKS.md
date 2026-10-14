@@ -22,15 +22,14 @@ What the hooks do
 
 If you need faster checks, edit `.githooks/pre-commit` to run a lighter command.
 
-CI
-- The GitHub Actions workflow runs `buildtool` on push and PRs and uploads `test_results/` as artifacts.
+CI (local-only)
 
-CI notes
-- This repository uses the `matlab-actions/run-build@v3` workflow to run the project's `buildtool` tasks on GitHub Actions. That action performs MATLAB setup and runs the requested tasks (for example, `tasks: test`).
-- Common CI failure: "Unable to find a license for MATLAB" — hosted GitHub runners may have MATLAB installed but require a license to run jobs. Two ways to resolve this:
-	- Provide a license via a repository secret: store a base64-encoded `license.dat` in a secret (e.g. `MATLAB_LICENSE_B64`) and write it to `$HOME/.matlab/<RELEASE>_licenses/license.dat` in a workflow step before `run-build`.
-	- Use a self-hosted runner that already has MATLAB installed and activated under your license (set `runs-on: self-hosted` or a custom label).
-- If CI fails with license errors, check the Actions run log to identify the failing step (Setup vs Run) and follow the above fixes. See `docs/COMMIT_CHECKLIST.md` for concise troubleshooting steps.
+This repository no longer uses GitHub Actions for CI. Instead, local git hooks implement automated checks at commit and push time.
+
+- `pre-commit` runs lightweight static checks (`buildtool('check')`) on staged MATLAB files.
+- `pre-push` runs the full test task (`buildtool('test')`) before pushing (can be adjusted if you want faster checks).
+
+If you prefer remote CI in the future, re-add a workflow and provide either a license secret for hosted runners or a self-hosted runner with an activated MATLAB license.
 
 Windows notes
 - The PowerShell installer (`scripts/install_git_hooks.ps1`) copies hook scripts into the repository `.git/hooks` directory but does not try to set the executable bit via `git update-index` (this step can fail on Windows and for files inside `.git/hooks`).

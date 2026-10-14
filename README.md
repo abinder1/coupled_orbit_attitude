@@ -52,10 +52,11 @@ pwsh -Command "matlab -batch \"buildtool('test')\""
 - `docs/HOOKS.md` — hook behavior and installer notes (Windows specifics)
 - `docs/COMMIT_CHECKLIST.md` — concise commit/push checklist (Windows-focused)
 
-CI notes
+CI strategy (local-only)
 
-- The repository CI uses `matlab-actions/run-build@v3` to run `buildtool` on GitHub Actions and upload test artifacts.
-- If a CI job fails with a MATLAB license error on GitHub-hosted runners, either add a base64-encoded license secret and write it to `$HOME/.matlab/<RELEASE>_licenses/license.dat` in the workflow, or run the job on a self-hosted runner with an activated MATLAB license. See `docs/COMMIT_CHECKLIST.md` for short troubleshooting steps.
+This repository does not use hosted CI. Instead, local git hooks (`.githooks/pre-commit` and `.githooks/pre-push`) perform automated checks on your machine. This avoids hosted runner costs and MATLAB licensing issues.
+
+If in future you want remote PR gating or cross-release testing, use a self-hosted runner with an activated MATLAB license or re-add a workflow and provide a license secret.
 
 If you need to bypass hooks for a one-off commit or push, use `--no-verify` with `git commit` or `git push`.
 
