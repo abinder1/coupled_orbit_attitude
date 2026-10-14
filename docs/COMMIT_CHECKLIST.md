@@ -19,8 +19,18 @@ This checklist is tuned for a single Windows developer workflow. Items marked **
 
 ## CI / GitHub Actions
 
-- The workflow at `.github/workflows/ci.yml` runs `buildtool` and uploads `test_results/` as artifacts.
-- Resolve CI failures before merging PRs.
+- The workflow at `.github/workflows/ci.yml` uses `matlab-actions/run-build@v3` to run `buildtool` and uploads `test_results/` as artifacts.
+- If CI fails with a MATLAB license error, provide a license to hosted runners via a repository secret (see below) or use a self-hosted runner with your activated MATLAB license.
+
+Troubleshooting license failures
+
+- To provide a license in GitHub Actions (hosted runners):
+	1. Base64-encode your `license.dat` and add it as a repository secret named e.g. `MATLAB_LICENSE_B64`.
+	2. Add a workflow step before `run-build@v3` that decodes the secret into `$HOME/.matlab/<RELEASE>_licenses/license.dat`.
+
+- Alternatively, register a self-hosted runner with MATLAB already activated and set the job's `runs-on` to `self-hosted`.
+
+Always inspect the failing Actions step log: it shows whether the failure is in setup (license/activation) or during `buildtool` execution (code/tests).
 
 ## Run checks locally (PowerShell — recommended on Windows)
 
