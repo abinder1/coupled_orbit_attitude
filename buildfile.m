@@ -1,5 +1,5 @@
 % Copyright (c) 2026 Andrew Binder
-function plan = buildfile % mh:ignore_style
+function plan = buildfile
     % Build plan for coupled_orbit_attitude.
     %   buildtool          -> setup, check, test (default)
     %   buildtool test     -> same as above
@@ -21,7 +21,7 @@ function plan = buildfile % mh:ignore_style
     plan.DefaultTasks = "test";
 end
 
-function setupTask(~) % mh:ignore_style
+function setupTask(~)
     % Put the project root (and all subfolders) on the MATLAB path.
     root = fileparts(mfilename("fullpath")); % folder holding buildfile (project root)
     addpath(genpath(root));
