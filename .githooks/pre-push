@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Run full tests before push (may be slow; adjust as needed)
+set -e
+repo_root="$(git rev-parse --show-toplevel)"
+matlab -batch "try, cd('${repo_root}'); buildtool('test'); catch ME, disp(getReport(ME,'extended')), exit(1), end"
+exit 0

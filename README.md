@@ -25,6 +25,35 @@ buildtool clean    % remove results/
 
 Test results and coverage are written to `results/`.
 
+## Developer setup (Windows)
+
+Quick steps to get the repository ready for development and to enable automated checks/hooks.
+
+1. Install local git hooks (PowerShell):
+
+```powershell
+pwsh scripts/install_git_hooks.ps1
+```
+
+2. Run the quick pre-commit checks locally (same as hooks):
+
+```powershell
+pwsh -Command "matlab -batch \"buildtool('check')\""
+```
+
+3. Run full tests (same as pre-push):
+
+```powershell
+pwsh -Command "matlab -batch \"buildtool('test')\""
+```
+
+4. See repository developer docs and checklist:
+
+- `docs/HOOKS.md` — hook behavior and installer notes (Windows specifics)
+- `docs/COMMIT_CHECKLIST.md` — concise commit/push checklist (Windows-focused)
+
+If you need to bypass hooks for a one-off commit or push, use `--no-verify` with `git commit` or `git push`.
+
 ## Conventions
 
 - Every implemented equation carries a `\label{eq:...}` in `derivations/` and an

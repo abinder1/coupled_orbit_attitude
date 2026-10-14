@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Pre-commit hook: run checks only on staged MATLAB files
+set -euo pipefail
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+
+echo "Pre-commit: running quick checklist..."
+echo " - [x] Static analysis / code issues (automated for staged .m/.mlx files)"
+echo " - [ ] Update docs/examples (manual)"
+echo " - [ ] Update CHANGELOG/version (manual)"
+
+# Find staged files that are added/modified/copied
+mapfile -t staged_files < <(git diff --cached --name-only --diff-filter=ACM)
+
+# Filter for MATLAB source files
+mat_files=()
+for f in "${staged_files[@]:-}"; do
+	case "$f" in
+		*.m|*.mlx)
+			# convert to absolute path
+			mat_files+=("$(realpath "$f")")
+			;;
+	esac
+done
+
+if [ ${#mat_files[@]} -eq 0 ]; then
+	echo "No staged MATLAB files to check. Skipping automated checks."
+	exit 0
+fi
+
+# Create a temporary file with the list of files (MATLAB will read it)
+tmpfile=$(mktemp)
+printf "%s\n" "${mat_files[@]}" > "$tmpfile"
+
+# Run MATLAB to perform checkcode on each file; fail on any issues
+matlab -batch "try, f = fileread('$tmpfile'); files = split(f,newline); for k=1:numel(files), fn=strtrim(files{k}); if isempty(fn), continue; end; msgs = checkcode(fn,'-id'); if ~isempty(msgs), disp(['Code issues in: ' fn]); disp(msgs); error('Code issues found'); end; end; catch ME, disp(getReport(ME,'extended')); exit(1); end"
+
+# Clean up
+rm -f "$tmpfile"
+exit 0

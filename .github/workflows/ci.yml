@@ -1,23 +1,32 @@
 name: CI
-on: [push, pull_request]
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
 
 jobs:
-  build-and-test:
+  build:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        matlab: [R2024a, R2025a]
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: matlab-actions/setup-matlab@v3
+      - name: Setup MATLAB
+        uses: mathworks/setup-matlab@v1
         with:
-          release: R2025b
-          # products: Symbolic_Math_Toolbox   # list any toolboxes you use
+          release: ${{ matrix.matlab }}
 
-      - uses: matlab-actions/run-build@v3
-        with:
-          tasks: test
+      - name: Run buildtool (setup, check, test)
+        run: |
+          matlab -batch "try, cd('${{ github.workspace }}'); buildtool; catch ME, disp(getReport(ME,'extended')); exit(1); end"
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload test artifacts
         if: always()
+        uses: actions/upload-artifact@v4
         with:
           name: test-results
-          path: results/
+          path: |
+            test_results/**
