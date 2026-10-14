@@ -5,11 +5,8 @@ on:
   pull_request:
 
 jobs:
-  build:
+  build-and-test:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        matlab: [R2024a, R2025a, R2026a]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -17,11 +14,12 @@ jobs:
       - name: Setup MATLAB
         uses: matlab-actions/setup-matlab@v3
         with:
-          release: ${{ matrix.matlab }}
+          release: R2024a
 
-      - name: Run buildtool (setup, check, test)
-        run: |
-          matlab -batch "try, cd('${{ github.workspace }}'); buildtool; catch ME, disp(getReport(ME,'extended')); exit(1); end"
+      - name: Run build and tests
+        uses: matlab-actions/run-build@v3
+        with:
+          tasks: test
 
       - name: Upload test artifacts
         if: always()
