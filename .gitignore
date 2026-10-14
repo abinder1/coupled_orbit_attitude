@@ -1,6 +1,7 @@
 # Build and run outputs
 results/
 runs/
+.buildtool/
 *.mltbx
 
 # MATLAB autosave / cache

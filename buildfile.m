@@ -21,6 +21,7 @@ plan.DefaultTasks = "test";
 end
 
 function setupTask(~)
-% Put the toolbox on the MATLAB path.
-addpath(fullfile(fileparts(mfilename("fullpath")), "toolbox"));
+% Put the project root (and all subfolders) on the MATLAB path.
+root = fileparts(mfilename("fullpath")); % folder containing buildfile (project root)
+addpath(genpath(root));
 end
