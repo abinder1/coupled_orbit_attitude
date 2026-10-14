@@ -7,18 +7,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: matlab-actions/setup-matlab@v2
+      - uses: matlab-actions/setup-matlab@v3
         with:
-          release: latest
+          release: R2025b
           # products: Symbolic_Math_Toolbox   # list any toolboxes you use
 
-      - uses: matlab-actions/run-build@v2
+      - uses: matlab-actions/run-build@v3
         with:
           tasks: test
-        # Private repo on GitHub-hosted runners: add a MATLAB batch licensing
-        # token as a repository secret and uncomment:
-        # env:
-        #   MLM_LICENSE_TOKEN: ${{ secrets.MATLAB_BATCH_TOKEN }}
 
       - uses: actions/upload-artifact@v4
         if: always()
