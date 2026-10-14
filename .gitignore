@@ -1,5 +1,5 @@
 # Build and run outputs
-results/
+test_results/
 runs/
 .buildtool/
 *.mltbx
