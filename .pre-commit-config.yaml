@@ -1,0 +1,27 @@
+minimum_pre_commit_version: "3.0.0"
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-yaml
+
+  - repo: local
+    hooks:
+      - id: matlab-style-format
+        name: MATLAB style formatter (MISS_HIT)
+        language: python
+        additional_dependencies:
+          - miss_hit==0.9.44
+        entry: mh_style --fix
+        files: \.m$
+
+      - id: matlab-lint
+        name: MATLAB linter (MISS_HIT)
+        language: python
+        additional_dependencies:
+          - miss_hit==0.9.44
+        entry: mh_lint
+        files: \.m$

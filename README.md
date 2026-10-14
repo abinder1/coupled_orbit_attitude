@@ -27,7 +27,7 @@ Test results and coverage are written to `results/`.
 
 ## Developer setup (Windows)
 
-Quick steps to get the repository ready for development and to enable automated checks/hooks.
+Quick steps to get the repository ready for development and automated checks.
 
 1. Install local git hooks (PowerShell):
 
@@ -35,26 +35,39 @@ Quick steps to get the repository ready for development and to enable automated 
 pwsh scripts/install_git_hooks.ps1
 ```
 
-2. Run the quick pre-commit checks locally (same as hooks):
+2. Install `pre-commit` for formatter + linter hooks:
+
+```powershell
+py -m pip install --user pre-commit
+py -m pre_commit run --all-files
+```
+
+The MATLAB pre-commit pipeline is defined in `.pre-commit-config.yaml` and uses:
+- `mh_style --fix` (auto-format/style fixes)
+- `mh_lint` (lint/static analysis)
+
+Project defaults for MISS_HIT are in `miss_hit.cfg`.
+
+3. Run MATLAB build checks locally (same commands used by hook tasks):
 
 ```powershell
 pwsh -Command "matlab -batch \"buildtool('check')\""
 ```
 
-3. Run full tests (same as pre-push):
+4. Run full tests (same as pre-push):
 
 ```powershell
 pwsh -Command "matlab -batch \"buildtool('test')\""
 ```
 
-4. See repository developer docs and checklist:
+5. See repository developer docs and checklist:
 
 - `docs/HOOKS.md` — hook behavior and installer notes (Windows specifics)
 - `docs/COMMIT_CHECKLIST.md` — concise commit/push checklist (Windows-focused)
 
 CI strategy (local-only)
 
-This repository does not use hosted CI. Instead, local git hooks (`.githooks/pre-commit` and `.githooks/pre-push`) perform automated checks on your machine. This avoids hosted runner costs and MATLAB licensing issues.
+This repository uses local hooks (`.githooks/pre-commit` and `.githooks/pre-push`) for automated checks on your machine. This avoids hosted runner costs and MATLAB licensing issues.
 
 If in future you want remote PR gating or cross-release testing, use a self-hosted runner with an activated MATLAB license or re-add a workflow and provide a license secret.
 

@@ -1,40 +1,56 @@
 #!/usr/bin/env bash
-# Pre-commit hook: run checks only on staged MATLAB files
+# Pre-commit hook: delegate to the pre-commit framework
 set -euo pipefail
 repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root"
 
-echo "Pre-commit: running quick checklist..."
-echo " - [x] Static analysis / code issues (automated for staged .m/.mlx files)"
-echo " - [ ] Update docs/examples (manual)"
-echo " - [ ] Update CHANGELOG/version (manual)"
+# Avoid cp1252 stdout warnings from Python-based hooks on Windows.
+export PYTHONIOENCODING=UTF-8
 
-# Find staged files that are added/modified/copied
-mapfile -t staged_files < <(git diff --cached --name-only --diff-filter=ACM)
-
-# Filter for MATLAB source files
-mat_files=()
-for f in "${staged_files[@]:-}"; do
-	case "$f" in
-		*.m|*.mlx)
-			# convert to absolute path
-			mat_files+=("$(realpath "$f")")
-			;;
-	esac
-done
-
-if [ ${#mat_files[@]} -eq 0 ]; then
-	echo "No staged MATLAB files to check. Skipping automated checks."
-	exit 0
+if [ ! -f "$repo_root/.pre-commit-config.yaml" ]; then
+	echo "ERROR: .pre-commit-config.yaml not found at repo root." >&2
+	exit 1
 fi
 
-# Create a temporary file with the list of files (MATLAB will read it)
-tmpfile=$(mktemp)
-printf "%s\n" "${mat_files[@]}" > "$tmpfile"
+if command -v pre-commit >/dev/null 2>&1; then
+	pre-commit run --hook-stage pre-commit
+	exit $?
+fi
 
-# Run MATLAB to perform checkcode on each file; fail on any issues
-matlab -batch "try, f = fileread('$tmpfile'); files = split(f,newline); for k=1:numel(files), fn=strtrim(files{k}); if isempty(fn), continue; end; msgs = checkcode(fn,'-id'); if ~isempty(msgs), disp(['Code issues in: ' fn]); disp(msgs); error('Code issues found'); end; end; catch ME, disp(getReport(ME,'extended')); exit(1); end"
+if command -v pre_commit >/dev/null 2>&1; then
+	pre_commit run --hook-stage pre-commit
+	exit $?
+fi
 
-# Clean up
-rm -f "$tmpfile"
-exit 0
+if command -v python >/dev/null 2>&1; then
+	python -m pre_commit run --hook-stage pre-commit
+	exit $?
+fi
+
+if command -v python3 >/dev/null 2>&1; then
+	python3 -m pre_commit run --hook-stage pre-commit
+	exit $?
+fi
+
+if command -v py >/dev/null 2>&1; then
+	py -m pre_commit run --hook-stage pre-commit
+	exit $?
+fi
+
+if command -v py.exe >/dev/null 2>&1; then
+	py.exe -m pre_commit run --hook-stage pre-commit
+	exit $?
+fi
+
+# Fallback for Windows environments where python/py are not on PATH
+# but Python is installed in the default per-user location.
+for p in /c/Users/*/AppData/Local/Programs/Python/Python*/python.exe; do
+	if [ -x "$p" ]; then
+		"$p" -m pre_commit run --hook-stage pre-commit
+		exit $?
+	fi
+done
+
+echo "ERROR: pre-commit is required but not installed or not on PATH." >&2
+echo "Install with: py -m pip install --user pre-commit" >&2
+exit 1

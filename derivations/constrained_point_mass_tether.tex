@@ -52,16 +52,16 @@
 
 \begin{document}
 	\maketitle
-	
+
 	\section{Description of the system}
 
 	\subsection{Equations of motion}
 
 	We consider three point masses $m_1$, $m_2$, and $m_3$ moving in a central gravitational field. Masses $m_1$ (the counterweight) and $m_2$ (the catch mechanism) are connected by a massless, rigid link of fixed length $L$ and therefore subject to internal constraint forces; $m_3$ is unconstrained.  Define the stacked state vector
-	
+
 	\begin{equation*}
 		\mathbf{X} = \begin{bmatrix}
-			\mathbf{r}_1 \\ \mathbf{r}_2 \\ \mathbf{r}_3 \\ \mathbf{v}_1 \\ \mathbf{v}_2 \\ \mathbf{v}_3 
+			\mathbf{r}_1 \\ \mathbf{r}_2 \\ \mathbf{r}_3 \\ \mathbf{v}_1 \\ \mathbf{v}_2 \\ \mathbf{v}_3
 		\end{bmatrix}, \quad\quad \mathbf{X} \in \mathbb{R}^{18\times 1}
 	\end{equation*}
 
@@ -78,9 +78,9 @@
 			(1 - \mu) \mathbf{D} &    \mathbf{I}_3 - (1 - \mu) \mathbf{D} & \mathbf{0}_3 \\
 			\mathbf{0}_3 & \mathbf{0}_3 & \mathbf{I}_3
 		\end{bmatrix} \begin{bmatrix}
-				ilde{\mathbf{a}}_1 \\
-				ilde{\mathbf{a}}_2 \\
-				ilde{\mathbf{a}}_3
+				\tilde{\mathbf{a}}_1 \\
+				\tilde{\mathbf{a}}_2 \\
+				\tilde{\mathbf{a}}_3
 		\end{bmatrix} + \begin{bmatrix}
 			\mu \mathbf{q} \\
 			-(1 - \mu) \mathbf{q} \\
@@ -95,7 +95,7 @@
 	\end{equation*}
 
 	and $\dot{\mathbf{d}} = \mathbf{v}_2 - \mathbf{v}_1$, $\hat{\mathbf{d}} = \mathbf{d} / \norm{\mathbf{d}}$, $\mathbf{D} = \hat{\mathbf{d}}\hat{\mathbf{d}}^T$, and $\mathbf{I}_3$ is the $3\times 3$ identity. The accelerations $\mathbf{a}_i$ are the true accelerations of each mass, and $\tilde{\mathbf{a}}_i$ are the corresponding \emph{virtual accelerations}: the accelerations each mass would experience if the interconnecting constraint were removed. Since $m_3$ is unconstrained, $\mathbf{a}_3=\tilde{\mathbf{a}}_3$, which is reflected in the last row of \eqref{eq:constrained_eoms}.
-	
+
 	\subsection{Covariance structure}
 
 	Because the state is fully coupled, measurements generally depend on combinations of the position and velocity components of multiple masses.  The full state covariance matrix
@@ -111,7 +111,7 @@
 	\mathbf{P}_{61} & \mathbf{P}_{62} & \mathbf{P}_{63} & \mathbf{P}_{64} & \mathbf{P}_{65} & \mathbf{P}_{66} \\
 	\end{bmatrix}.
 	\end{equation*}
-	
+
 	\subsection{Measurements that implicate two of the point masses}
 
 	Many sensors mounted on the dumbbell produce measurements that depend on both $\mathbf{r}_1$ and $\mathbf{r}_2$ (and their velocities). For example, a star tracker on $m_2$ aligned with the link axis measures angles determined by the unit direction
@@ -145,31 +145,31 @@
 	\end{equation*}
 
 	The simpler expression $\mathbf{P}^+=(\mathbf{I}_{18}-\mathbf{K}\mathbf{H})\mathbf{P}^-$ is algebraically equivalent in exact arithmetic but can lose symmetry or positive semidefiniteness in finite-precision implementations; the Joseph form preserves these properties when $\mathbf{R}$ is symmetric positive semidefinite.
-	
+
 	\section{Measuring the random variables we want to}
-	
+
 	Multivariate normal distributions follow a rule when subjected to \href{https://en.wikipedia.org/wiki/Multivariate_normal_distribution#Affine_transformation}{affine transformations}.  Luckily our random variables of interest ($\mathbf{r}_3 - \mathbf{r}_2$ and $\mathbf{v}_3 - \mathbf{v}_2$) are affine transformations of the full state variables $\mathbf{X}$.  Under the transformation $\mathbf{B}_p$:
-	
+
 	\begin{equation*}
 		\mathbf{B}_p = \begin{bmatrix}
 			\mathbf{0}_3 & -\mathbf{I}_3 & \mathbf{I}_3 & \mathbf{0}_3 & \mathbf{0}_3 & \mathbf{0}_3
 		\end{bmatrix}
 	\end{equation*}
-	
+
 	The covariance of $\mathbf{r}_3 - \mathbf{r}_2$ looks like $\boldsymbol{\Sigma} = \mathbf{P}_{22} + \mathbf{P}_{33} - \mathbf{P}_{23} - \mathbf{P}_{32}$.  Alternatively, under the transformation $\mathbf{B}_v$:
-	
+
 	\begin{equation*}
 		\mathbf{B}_v = \begin{bmatrix}
 			\mathbf{0}_3 & \mathbf{0}_3 & \mathbf{0}_3 & \mathbf{0}_3 & -\mathbf{I}_3 & \mathbf{I}_3
 		\end{bmatrix}
 	\end{equation*}
-	
+
 	The covariance of $\mathbf{v}_3 - \mathbf{v}_2$ looks like $\boldsymbol{\Sigma} = \mathbf{P}_{55} + \mathbf{P}_{66} - \mathbf{P}_{56} - \mathbf{P}_{65}$
-	
+
 	\section{Jacobian of the Dynamics}
-	
+
 	The original dynamics are given by the following equation:
-	
+
 	\begin{equation*}
 		\begin{bmatrix}
 			\mathbf{a}_1 \\ \mathbf{a}_2 \\ \mathbf{a}_3
@@ -185,9 +185,9 @@
 			\mathbf{0}_{3\times 1}
 		\end{bmatrix}, \quad \quad \mathbf{q} = (\dot{\mathbf{d}}\cdot \dot{\mathbf{d}}) (\mathbf{d} \cdot \mathbf{d})^{-1} \mathbf{d}
 	\end{equation*}
-	
+
 	Where $\mu = m_2 / (m_1 + m_2)$, $\mathbf{d} = \mathbf{r}_2 - \mathbf{r}_1$ is the relative position between $m_1$ and $m_2$, $\dot{\mathbf{d}} = \mathbf{v}_2 - \mathbf{v}_1$ is their relative velocity, $\hat{\mathbf{d}} = \frac{\mathbf{d}}{\norm{\mathbf{d}}}$ is the unit vector that points from $m_1$ to $m_2$, the tensor $\mathbf{D} = \hat{\mathbf{d}}\hat{\mathbf{d}}^T$ is defined as the outer product between $\hat{\mathbf{d}}$ and itself, and where $\mathbf{I}_3$ is the $3\times 3$ identity matrix.  This linear system can be expanded into three coupled state equations:
-	
+
 	\begin{align*}
 	\begin{split}
 		\mathbf{a}_1 &= \tilde{\mathbf{a}}_1 - \mu  (\hat{\mathbf{d}} \cdot \tilde{\mathbf{a}}_1) \hat{\mathbf{d}} + \mu  (\hat{\mathbf{d}}\cdot  \tilde{\mathbf{a}}_2) \hat{\mathbf{d}} + \mu \mathbf{q} \\
@@ -195,46 +195,46 @@
 		\mathbf{a}_3 &= \tilde{\mathbf{a}}_3 \\
 	\end{split}
 	\end{align*}
-	
+
 	Presumably $\tilde{\mathbf{a}}_1$ is only a function of $\mathbf{r}_1$, $\tilde{\mathbf{a}}_2$ is only a function of $\mathbf{r}_2$, and $\tilde{\mathbf{a}}_3$ is only a function of $\mathbf{r}_3$ (in other words, that the virtual accelerations only depend on the state of that point mass and that the virtual accelerations only include position-dependent terms).  Let's call $\tilde{A}_1 = \pd{\tilde{\mathbf{a}}_1}{\mathbf{r}_1}$, $\tilde{A}_2 = \pd{\tilde{\mathbf{a}}_2}{\mathbf{r}_2}$, and $\tilde{A}_3 = \pd{\tilde{\mathbf{a}}_3}{\mathbf{r}_3}$.
-	
-	
+
+
 	\begin{equation*}
 		Z_1 = (\hat{\mathbf{d}} \cdot \tilde{\mathbf{a}}_1) \mathbf{I}_3 + \hat{\mathbf{d}} \tilde{\mathbf{a}}_1^T,\quad\quad Z_2 = (\hat{\mathbf{d}} \cdot \tilde{\mathbf{a}}_2) \mathbf{I}_3 + \hat{\mathbf{d}} \tilde{\mathbf{a}}_2^T
 	\end{equation*}
-	
+
 	\begin{equation*}
 	Z_3 = \pd{\hat{\mathbf{d}}}{\mathbf{d}} = \pddown{\mathbf{d} (\mathbf{d}\cdot\mathbf{d})^{-1/2}}{\mathbf{d}} = (\mathbf{d}\cdot\mathbf{d})^{-1/2} \left[ \mathbf{I}_3 - \mathbf{D} \right] \\
 	\end{equation*}
-	
+
 	\begin{equation*}
 		Z_4 = \left( \frac{\dot{\mathbf{d}}\cdot \dot{\mathbf{d}}}{\mathbf{d} \cdot \mathbf{d}} \right) \left[ \mathbf{I}_3 - 2 \mathbf{D} \right]
 	\end{equation*}
-	
+
 	\begin{equation*}
-		Z_5 = \pd{\mathbf{q}}{\mathbf{v}_1} = (\mathbf{d} \cdot \mathbf{d})^{-1} \mathbf{d} \pddown{\dot{\mathbf{d}} \cdot \dot{\mathbf{d}}}{\mathbf{v}_1} = -2 (\mathbf{d} \cdot \mathbf{d})^{-1} \mathbf{d} \dot{\mathbf{d}}^T 
+		Z_5 = \pd{\mathbf{q}}{\mathbf{v}_1} = (\mathbf{d} \cdot \mathbf{d})^{-1} \mathbf{d} \pddown{\dot{\mathbf{d}} \cdot \dot{\mathbf{d}}}{\mathbf{v}_1} = -2 (\mathbf{d} \cdot \mathbf{d})^{-1} \mathbf{d} \dot{\mathbf{d}}^T
 	\end{equation*}
-	
+
 	\begin{align*}
 	\begin{split}
 		\pd{\mathbf{a}_1}{\mathbf{r}_1} &= \pddown{\tilde{\mathbf{a}}_1 - \mu  (\hat{\mathbf{d}} \cdot \tilde{\mathbf{a}}_1) \hat{\mathbf{d}} + \mu  (\hat{\mathbf{d}}\cdot  \tilde{\mathbf{a}}_2) \hat{\mathbf{d}} + \mu \mathbf{q}}{\mathbf{r}_1} \\ &= \pd{\tilde{\mathbf{a}}_1}{\mathbf{r}_1} - \mu \pddown{  (\hat{\mathbf{d}} \cdot \tilde{\mathbf{a}}_1) \hat{\mathbf{d}}}{\mathbf{r}_1} + \mu \pddown{  (\hat{\mathbf{d}}\cdot  \tilde{\mathbf{a}}_2) \hat{\mathbf{d}}}{\mathbf{r}_1} + \mu \pd{\mathbf{q}}{\mathbf{r}_1} \\ &= (\mathbf{I}_3 - \mu \mathbf{D})\tilde{A}_1 + \mu [(Z_1 - Z_2) Z_3 - Z_4] \\
 	\end{split}
 	\end{align*}
-			
+
 	\begin{align*}
 	\begin{split}
 		\pd{\mathbf{a}_1}{\mathbf{r}_2} &= \pddown{\tilde{\mathbf{a}}_1 - \mu  (\hat{\mathbf{d}} \cdot \tilde{\mathbf{a}}_1) \hat{\mathbf{d}} + \mu  (\hat{\mathbf{d}}\cdot  \tilde{\mathbf{a}}_2) \hat{\mathbf{d}} + \mu \mathbf{q}}{\mathbf{r}_2} \\ &= - \mu \pddown{  (\hat{\mathbf{d}} \cdot \tilde{\mathbf{a}}_1) \hat{\mathbf{d}}}{\mathbf{r}_2} + \mu \pddown{  (\hat{\mathbf{d}}\cdot  \tilde{\mathbf{a}}_2) \hat{\mathbf{d}}}{\mathbf{r}_2} + \mu \pd{\mathbf{q}}{\mathbf{r}_2} \\ &= \mu \mathbf{D} \tilde{A}_2 - \mu [(Z_1 - Z_2) Z_3 - Z_4] \\
 	\end{split}
 	\end{align*}
-	
+
 	\begin{equation*}
 		\pd{\mathbf{a}_1}{\mathbf{v}_1} = \pddown{\tilde{\mathbf{a}}_1 - \mu  (\hat{\mathbf{d}} \cdot \tilde{\mathbf{a}}_1) \hat{\mathbf{d}} + \mu  (\hat{\mathbf{d}}\cdot  \tilde{\mathbf{a}}_2) \hat{\mathbf{d}} + \mu \mathbf{q}}{\mathbf{v}_1} = \mu \pd{\mathbf{q}}{\mathbf{v}_1} = \mu Z_5
 	\end{equation*}
-	
+
 	\begin{equation*}
 		\pd{\mathbf{a}_1}{\mathbf{v}_2} = -\mu Z_5
 	\end{equation*}
-	
+
 	\begin{align*}
 	\begin{split}
 		\pd{\mathbf{a}_2}{\mathbf{r}_1}
@@ -243,7 +243,7 @@
 		&= (1 - \mu) \mathbf{D} \tilde{A}_1 - (1 - \mu) [(Z_1 - Z_2) Z_3 - Z_4] \\
 	\end{split}
 	\end{align*}
-	
+
 	\begin{align*}
 	\begin{split}
 		\pd{\mathbf{a}_2}{\mathbf{v}_1}
@@ -251,8 +251,8 @@
 		&= - (1-\mu) \pd{\mathbf{q}}{\mathbf{v}_1} = - (1-\mu) Z_5 \\
 	\end{split}
 	\end{align*}
-	
-	
+
+
 	\begin{align*}
 	\begin{split}
 		\pd{\mathbf{a}_2}{\mathbf{r}_2}
@@ -261,17 +261,17 @@
 		&= (\mathbf{I}_3 - (1 - \mu) \mathbf{D}) \tilde{A}_2 + (1 - \mu) [(Z_1 - Z_2) Z_3 - Z_4] \\
 	\end{split}
 	\end{align*}
-	
+
 	\begin{equation*}
 		\pd{\mathbf{a}_2}{\mathbf{v}_2} = (1-\mu) Z_5
 	\end{equation*}
-	
+
 	\clearpage \appendix
-	
+
 	\section{Derivation of the Dumbell Satellite EoMs}
-	
+
 	Presume that two point masses ($m_1$ and $m_2$) are connected by a massless rigid beam of length $L$.  The two point masses are at a position and velocity state $\mathbf{x}_1$ and $\mathbf{x}_2$ of:
-	
+
 	\begin{equation*}
 		\mathbf{x}_1 = \begin{bmatrix}
 			\mathbf{r}_1 \\ \mathbf{v}_1
@@ -279,25 +279,25 @@
 			\mathbf{r}_2 \\ \mathbf{v}_2
 		\end{bmatrix}
 	\end{equation*}
-	
+
 	The relative state between the two point-masses, $\mathbf{s}$, is found by subtracting $\mathbf{x}_1$ from $\mathbf{x}_2$
-	
+
 	\begin{equation*}
 		\mathbf{s} = \begin{bmatrix}
 			\mathbf{d} \\ \dot{\mathbf{d}}
 		\end{bmatrix} = \begin{bmatrix}
 			\mathbf{r}_2 - \mathbf{r}_1 \\ \mathbf{v}_2 - \mathbf{v}_1
-		\end{bmatrix} = \mathbf{x}_2 - \mathbf{x}_1 
+		\end{bmatrix} = \mathbf{x}_2 - \mathbf{x}_1
 	\end{equation*}
-	
+
 	Constraining the distance between $m_1$ and $m_2$ can be written as a single scalar constraint:
-	
+
 	\begin{equation*}
 		\mathbf{d} \cdot \mathbf{d} = L^2
 	\end{equation*}
-	
+
 	To enforce this constraint, a force colinear to $\mathbf{d}$ acts on $m_1$, and acts equally and opposite on $m_2$:
-	
+
 	\begin{align}
 	\begin{split}
 		\label{eq:NII}
@@ -305,21 +305,21 @@
 		\mathbf{F}_2 &= \mathbf{f}_2 - c \cdot \mathbf{d} = m_2 \mathbf{a}_2 \\
 	\end{split}
 	\end{align}
-	
+
 	where $\mathbf{F}_1/\mathbf{F}_2$ are the total forces acting on $m_1/m_2$ respectively, $\mathbf{f}_1/\mathbf{f}_2$ are the sum of the external forces acting on each of the two masses (read:  everything but the constraint force), and where $\pm c \cdot \mathbf{d}$ are the equal and opposite constraint forces.  To solve for accelerations that satisfy the distance maintenance constraint, we get six equations for seven unknowns in Eqn. \eqref{eq:NII}.  We require one more equation in terms of the unknowns, which can be acquired by differentiating the scalar constraint twice:
-	
+
 	\begin{equation*}
 		\frac{d^2}{dt^2} \left[ \mathbf{d} \cdot \mathbf{d} = L^2 \right] \rightarrow \ddot{\mathbf{d}} \cdot \mathbf{d} + \dot{\mathbf{d}} \cdot \dot{\mathbf{d}} = 0
 	\end{equation*}
-	
+
 	Expanding the $\ddot{\mathbf{d}}$ term, we get:
-	
+
 	\begin{equation*}
 		(\mathbf{a}_2 - \mathbf{a}_1) \cdot \mathbf{d} = \mathbf{d}^T \mathbf{a}_2 - \mathbf{d}^T \mathbf{a}_1 = - (\dot{\mathbf{d}} \cdot \dot{\mathbf{d}})
 	\end{equation*}
-	
+
 	which is linear in the accelerations.  If we compose the seven equations into one large linear system, we get:
-	
+
 	\begin{equation*}
 		\begin{bmatrix}
 			m_1 \mathbf{I}_3 & \mathbf{0} & -\mathbf{d} \\
@@ -331,15 +331,15 @@
 			\mathbf{f}_1 \\ \mathbf{f}_2 \\ - (\dot{\mathbf{d}} \cdot \dot{\mathbf{d}})
 		\end{bmatrix}
 	\end{equation*}
-	
+
 	which is linear and solvable.  If we do invert this system and solve for $c$, we get the expression:
-	
+
 	\begin{equation*}
 		c = \frac{m_1 (\mathbf{d}\cdot \mathbf{f}_2) - m_2 (\mathbf{d}\cdot \mathbf{f}_1) + m_1 m_2 (\dot{\mathbf{d}} \cdot \dot{\mathbf{d}})}{(m_1 + m_2) (\mathbf{d} \cdot \mathbf{d})}
 	\end{equation*}
-	
+
 	$c$ can be broken down into it's three terms:
-	
+
 	\begin{align*}
 	\begin{split}
 		c &= c_a + c_b + c_c \\
@@ -348,83 +348,83 @@
 		c_c &= \frac{m_1 m_2}{m_1 + m_2} \frac{\dot{\mathbf{d}} \cdot \dot{\mathbf{d}}}{\mathbf{d} \cdot \mathbf{d}} \\
 	\end{split}
 	\end{align*}
-	
+
 	To solve for the constrained $\mathbf{a}_1$ and $\mathbf{a}_2$, we can introduce this term into the expressions for $\mathbf{F}_1$ and $\mathbf{F}_2$:
-	
+
 	\begin{equation*}
 		\mathbf{f}_1 + \frac{m_1}{m_1 + m_2} \left( \hat{\mathbf{d}} \hat{\mathbf{d}}^T \right) \mathbf{f}_2 - \frac{m_2}{m_1 + m_2} \left( \hat{\mathbf{d}} \hat{\mathbf{d}}^T \right) \mathbf{f}_1 + \frac{m_1 m_2}{m_1 + m_2} \frac{\dot{\mathbf{d}} \cdot \dot{\mathbf{d}}}{\mathbf{d} \cdot \mathbf{d}} \mathbf{d} = m_1 \mathbf{a}_1
 	\end{equation*}
-	
+
 	\begin{equation*}
 		\mathbf{f}_2 - \frac{m_1}{m_1 + m_2} \left( \hat{\mathbf{d}} \hat{\mathbf{d}}^T \right) \mathbf{f}_2 + \frac{m_2}{m_1 + m_2} \left( \hat{\mathbf{d}} \hat{\mathbf{d}}^T \right) \mathbf{f}_1 - \frac{m_1 m_2}{m_1 + m_2} \frac{\dot{\mathbf{d}} \cdot \dot{\mathbf{d}}}{\mathbf{d} \cdot \mathbf{d}} \mathbf{d} = m_2 \mathbf{a}_2
 	\end{equation*}
-	
+
 	To simplify the notation somewhat, let's define $M = m_1 + m_2$ and $\mathbf{D} = \hat{\mathbf{d}} \hat{\mathbf{d}}^T / M$:
-	
+
 	\begin{align}
 	\begin{split}
 		m_1 \mathbf{a}_1 &= (\mathbf{I}_3 - m_2 \mathbf{D}) \cdot \mathbf{f}_1 + m_1 \mathbf{D} \cdot \mathbf{f}_2 + \frac{m_1 m_2}{M} \frac{\dot{\mathbf{d}} \cdot \dot{\mathbf{d}}}{\mathbf{d} \cdot \mathbf{d}} \mathbf{d} \\
 		m_2 \mathbf{a}_2 &= m_2 \mathbf{D} \cdot \mathbf{f}_1 + (\mathbf{I}_3 - m_1 \mathbf{D}) \mathbf{f}_2 - \frac{m_1 m_2}{m_1 + m_2} \frac{\dot{\mathbf{d}} \cdot \dot{\mathbf{d}}}{\mathbf{d} \cdot \mathbf{d}} \mathbf{d} \\
 	\end{split}
 	\end{align}
-	
+
 	With one final simplification $\mathbf{b} = (1/M) (\dot{\mathbf{d}} \cdot \dot{\mathbf{d}}) / (\mathbf{d} \cdot \mathbf{d}) \mathbf{d}$, we can get these expressions down to their simplest forms:
-	
+
 	\begin{align}
 	\begin{split}
 		\mathbf{a}_1 &= \frac{1}{m_1} (\mathbf{I}_3 - m_2 \mathbf{D}) \cdot \mathbf{f}_1 + \mathbf{D} \cdot \mathbf{f}_2 + m_2 \mathbf{b} \\
 		\mathbf{a}_2 &= \mathbf{D} \cdot \mathbf{f}_1 + \frac{1}{m_2} (\mathbf{I}_3 - m_1 \mathbf{D}) \mathbf{f}_2 - m_1 \mathbf{b} \\
 	\end{split}
 	\end{align}
-	
+
 	$\mathbf{f}_1$ and $\mathbf{f}_2$ remain the sum of the external forces acting on each of the two masses.  For similarity to most dynamics derivations, let's substitute these resultant forces for a virtual acceleration acting on each body.  This virtual acceleration would be the acceleration of the mass (were the masses not constrained to eachother):
-	
+
 	\begin{equation*}
 		\mathbf{f}_1 \rightarrow m_1 \tilde{\mathbf{a}}_1, \quad\quad \mathbf{f}_2 \rightarrow m_2 \tilde{\mathbf{a}}_2
 	\end{equation*}
-	
+
 	Using these definitions, we get our final expression for the resultant accelerations on both masses:
-	
+
 	\begin{align}
 	\begin{split}
 		\mathbf{a}_1 &= (\mathbf{I}_3 - m_2 \mathbf{D}) \cdot \tilde{\mathbf{a}}_1 + m_2 \mathbf{D} \cdot \tilde{\mathbf{a}}_2 + m_2 \mathbf{b} \\
 		\mathbf{a}_2 &= m_1 \mathbf{D} \cdot \tilde{\mathbf{a}}_1 + (\mathbf{I}_3 - m_1 \mathbf{D}) \cdot \tilde{\mathbf{a}}_2 - m_1 \mathbf{b} \\
 	\end{split}
 	\end{align}
-	
+
 	\hl{Expanding this sum out and substituting in all original definitions, we get a final system of equations for our system:}
-	
+
 	\begin{align}
 		\begin{split}
 			\mathbf{a}_1 &= \tilde{\mathbf{a}}_1 + \frac{m_2}{m_1 + m_2} q \cdot \mathbf{d}  \\
 			\mathbf{a}_2 &= \tilde{\mathbf{a}}_2 - \frac{m_1}{m_1 + m_2} q \cdot \mathbf{d}
 		\end{split}
 	\end{align}
-	
+
 	\hl{where:}
-	
+
 	\begin{equation*}
 		q = \frac{ \mathbf{d} \cdot (\tilde{\mathbf{a}}_2 - \tilde{\mathbf{a}}_1) + \dot{\mathbf{d}} \cdot \dot{\mathbf{d}} }{ \mathbf{d} \cdot \mathbf{d} }
 	\end{equation*}
-	
-	
-	
-	
-	
+
+
+
+
+
 	\section{Example:  Earth Orbit}
-	
+
 	Within this model, all virtual accelerations $\tilde{\mathbf{a}}$ are the same:
-	
+
 	\begin{equation*}
 		\tilde{\mathbf{a}} = -\mu_E \frac{\mathbf{r}}{(\mathbf{r} \cdot \mathbf{r})^{3/2}}
 	\end{equation*}
-	
+
 	A simulation that uses this virtual acceleration model is provided in the code.
-	
+
 	\begin{equation*}
 		\pd{\tilde{\mathbf{a}}}{\mathbf{r}} = -\mu_E \pddown{ \mathbf{r} (\mathbf{r} \cdot \mathbf{r})^{-3/2} }{\mathbf{r}}
 	\end{equation*}
-	
+
 	\begin{equation*}
 		\pddown{ \mathbf{r} (\mathbf{r} \cdot \mathbf{r})^{-3/2} }{\mathbf{r}} = \left[ \mathbf{I}_3 - 3 \hat{\mathbf{r}} \hat{\mathbf{r}}^T \right] (\mathbf{r} \cdot \mathbf{r})^{-3/2}
 	\end{equation*}
