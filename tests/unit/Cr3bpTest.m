@@ -1,7 +1,7 @@
 % Copyright (c) 2026 Andrew Binder
 
 classdef Cr3bpTest < matlab.unittest.TestCase
-    % Tests for coa.+orbit.cr3bp
+    % Tests for coa.orbit.cr3bp
 
     properties (TestParameter)
         mu = {0.0121505856, 0.3, 1e-6}
@@ -42,50 +42,56 @@ classdef Cr3bpTest < matlab.unittest.TestCase
 
         % (2) Output handling via nargout
 
-        function singleOutputIsStateDerivative(tc, state, mu)
-            xdot = coa.orbit.cr3bp(state, mu);
-            tc.verifySize(xdot, [6, 1]);
-            tc.verifyEqual(xdot(1:3), state(4:6));
+        function singleOutputIsAcceleration(tc, state, mu)
+            a = coa.orbit.cr3bp(state, mu);
+            tc.verifySize(a, [3, 1]);
         end
 
-        function secondOutputIsJacobian(tc, state, mu)
-            [xdot, J] = coa.orbit.cr3bp(state, mu);
-            tc.verifySize(xdot, [6, 1]);
-            tc.verifySize(J, [6, 6]);
+        function derivativeOutputsAreThreeByThree(tc, state, mu)
+            [a, da_dp, da_dv] = coa.orbit.cr3bp(state, mu);
+            tc.verifySize(a, [3, 1]);
+            tc.verifySize(da_dp, [3, 3]);
+            tc.verifySize(da_dv, [3, 3]);
         end
 
-        function stateDerivativeIndependentOfNargout(tc, state, mu)
-            xdot1 = coa.orbit.cr3bp(state, mu);
-            [xdot2, ~] = coa.orbit.cr3bp(state, mu);
-            tc.verifyEqual(xdot2, xdot1);
+        function twoOutputsMatchThreeOutputs(tc, state, mu)
+            [a2, da_dp2] = coa.orbit.cr3bp(state, mu);
+            [a3, da_dp3, ~] = coa.orbit.cr3bp(state, mu);
+            tc.verifyEqual(a2, a3);
+            tc.verifyEqual(da_dp2, da_dp3);
         end
 
-        function rejectsMoreThanTwoOutputs(tc)
-            % Requesting two outputs is valid; three is not.
-            tc.verifyError(@() requestThree(), ?MException);
+        function accelerationIndependentOfNargout(tc, state, mu)
+            a1 = coa.orbit.cr3bp(state, mu);
+            [a2, ~, ~] = coa.orbit.cr3bp(state, mu);
+            tc.verifyEqual(a2, a1);
         end
 
-        function jacobianHasKinematicBlocks(tc, state, mu)
-            [~, J] = coa.orbit.cr3bp(state, mu);
-            tc.verifyEqual(J(1:3, 1:3), zeros(3));
-            tc.verifyEqual(J(1:3, 4:6), eye(3));
-            % Coriolis block: -2*skew([0; 0; 1])
-            tc.verifyEqual(J(4:6, 4:6), -2 * coa.util.skew([0; 0; 1]));
+        function rejectsMoreThanThreeOutputs(tc)
+            % Requesting three outputs is valid; four is not.
+            tc.verifyError(@() requestFour(), ?MException);
         end
 
-        % (3) Jacobian vs. central finite differences of the state derivative
-
-        function jacobianMatchesCentralDifference(tc, state, mu)
-            [~, J] = coa.orbit.cr3bp(state, mu);
-            jacobian_fd = centralDifferenceJacobian(@(z) coa.orbit.cr3bp(z, mu), state);
-            tc.verifyEqual(J, jacobian_fd, "AbsTol", 1e-6, "RelTol", 1e-6);
+        function velocityPartialIsCoriolisTerm(tc, state, mu)
+            [~, ~, da_dv] = coa.orbit.cr3bp(state, mu);
+            % Coriolis term: -2*skew([0; 0; 1])
+            tc.verifyEqual(da_dv, -2 * coa.util.skew([0; 0; 1]));
         end
 
-        function accelerationJacobianMatchesCentralDifference(tc, state, mu)
-            [~, J] = coa.orbit.cr3bp(state, mu);
-            accel = @(z) selectRows(coa.orbit.cr3bp(z, mu), 4:6);
-            jacobian_fd = centralDifferenceJacobian(accel, state);
-            tc.verifyEqual(J(4:6, :), jacobian_fd, "AbsTol", 1e-6, "RelTol", 1e-6);
+        % (3) Partials vs. central finite differences of the acceleration
+
+        function positionPartialMatchesCentralDifference(tc, state, mu)
+            [~, da_dp] = coa.orbit.cr3bp(state, mu);
+            accel = @(r) coa.orbit.cr3bp([r; state(4:6)], mu);
+            da_dp_fd = centralDifferenceJacobian(accel, state(1:3));
+            tc.verifyEqual(da_dp, da_dp_fd, "AbsTol", 1e-6, "RelTol", 1e-6);
+        end
+
+        function velocityPartialMatchesCentralDifference(tc, state, mu)
+            [~, ~, da_dv] = coa.orbit.cr3bp(state, mu);
+            accel = @(v) coa.orbit.cr3bp([state(1:3); v], mu);
+            da_dv_fd = centralDifferenceJacobian(accel, state(4:6));
+            tc.verifyEqual(da_dv, da_dv_fd, "AbsTol", 1e-6, "RelTol", 1e-6);
         end
 
     end
@@ -103,10 +109,6 @@ function jacobian_fd = centralDifferenceJacobian(f, x)
     end
 end
 
-function y = selectRows(x, idx)
-    y = x(idx);
-end
-
-function requestThree()
-    [~, ~, ~] = coa.orbit.cr3bp(zeros(6, 1) + 0.5, 0.01);
+function requestFour()
+    [~, ~, ~, ~] = coa.orbit.cr3bp(zeros(6, 1) + 0.5, 0.01);
 end
