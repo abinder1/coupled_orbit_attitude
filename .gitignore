@@ -23,3 +23,6 @@ slprj/
 *.run.xml
 *.synctex.gz
 derivations/*.pdf
+
+# External documentation for the project
+slides/
