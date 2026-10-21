@@ -24,5 +24,6 @@ slprj/
 *.synctex.gz
 derivations/*.pdf
 
-# External documentation for the project
+# External documentation for the project and archive
 slides/
+.archive/
