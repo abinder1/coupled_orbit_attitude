@@ -1,0 +1,391 @@
+\documentclass[]{article}
+
+%%%%%%%%%%%%% Package imports %%%%%%%%%%%%%
+\usepackage[T1]{fontenc}
+\usepackage{titlesec}
+\usepackage[backend=biber, style=numeric]{biblatex}
+\usepackage{multicol}
+\usepackage{easyReview}
+\usepackage{matlab-prettifier}
+\usepackage[letterpaper, margin=1in]{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{longtable}
+\usepackage{booktabs}
+\usepackage{bm}
+\usepackage{bbm}
+\usepackage{hyperref}
+
+%%%%%%%%%%%%% Macro definitions %%%%%%%%%%%%%
+
+\newcommand{\pd}[2]{\frac{\partial\;#1}{\partial\;#2}}
+\newcommand{\pddown}[2]{\frac{\partial}{\partial\;#2} \left[ #1 \right] }
+
+\newcommand{\norm}[1]{\left| \left| #1 \right| \right|_{2}}
+
+\newcommand{\x}{\bm{x}}
+\newcommand{\xh}{\hat{\bm{x}}}
+\newcommand{\z}{\bm{z}}
+\newcommand{\Pm}{\mathbf{P}}
+\newcommand{\Fm}{\mathbf{F}}
+\newcommand{\Gm}{\mathbf{G}}
+\newcommand{\Hm}{\mathbf{H}}
+\newcommand{\Km}{\mathbf{K}}
+\newcommand{\Qm}{\mathbf{Q}}
+\newcommand{\Rm}{\mathbf{R}}
+\newcommand{\Sm}{\mathbf{S}}
+\newcommand{\Phim}{\bm{\Phi}}
+\newcommand{\Id}{\mathbf{I}}
+
+%%%%%%%%%%%%% Title card content %%%%%%%%%%%%%
+\title{Extended Kalman Filter Equations with Process Noise}
+\author{}
+\date{}
+
+%%%%%%%%%%%%% Begin document %%%%%%%%%%%%%
+\begin{document}
+\maketitle
+
+\section*{Model}
+\begin{align}
+  \dot{\x}(t) &= \bm{f}\big(\x(t),\bm{u}(t),t\big) + \Gm(t)\,\bm{w}(t),
+  & \mathbb{E}\!\left[\bm{w}(t)\bm{w}^\top(\tau)\right] &= \Qm(t)\,\delta(t-\tau), \\
+  \z_k &= \bm{h}\big(\x(t_k),t_k\big) + \bm{v}_k,
+  & \mathbb{E}\!\left[\bm{v}_k\bm{v}_j^\top\right] &= \Rm_k\,\delta_{kj},
+\end{align}
+with $\bm{w}$ and $\bm{v}_k$ zero-mean, mutually uncorrelated, and
+uncorrelated with $\x(t_0)\sim\mathcal{N}(\xh_0,\Pm_0)$, $\Pm_0\succ 0$.
+
+Jacobians:
+\begin{equation}
+  \Fm(t) = \left.\frac{\partial \bm{f}}{\partial \x}\right|_{\xh(t)}, \qquad
+  \Hm_k  = \left.\frac{\partial \bm{h}}{\partial \x}\right|_{\xh_k^-}.
+\end{equation}
+
+\section*{Propagation (continuous--discrete)}
+For $t\in[t_{k-1},t_k]$, starting from $\xh_{k-1}^+$ and $\Pm_{k-1}^+$:
+\begin{align}
+  \dot{\xh}(t) &= \bm{f}\big(\xh(t),\bm{u}(t),t\big), \\
+  \dot{\Pm}(t) &= \Fm(t)\Pm(t) + \Pm(t)\Fm^\top(t) + \Gm(t)\Qm(t)\Gm^\top(t),
+  \label{eq:lyapunov}
+\end{align}
+giving $\xh_k^- = \xh(t_k)$ and $\Pm_k^- = \Pm(t_k)$.
+Equation~\eqref{eq:lyapunov} is the (linear) Lyapunov differential equation.
+
+Equivalently, using the state transition matrix
+$\dot{\Phim}(t,t_{k-1}) = \Fm(t)\Phim(t,t_{k-1})$, $\Phim(t_{k-1},t_{k-1})=\Id$:
+\begin{align}
+  \Pm_k^- &= \Phim_k \Pm_{k-1}^+ \Phim_k^\top + \Qm_k, \\
+  \Qm_k   &= \int_{t_{k-1}}^{t_k}
+             \Phim(t_k,\tau)\,\Gm(\tau)\Qm(\tau)\Gm^\top(\tau)\,\Phim^\top(t_k,\tau)\,d\tau,
+\end{align}
+where $\Phim_k \equiv \Phim(t_k,t_{k-1})$.
+
+\section*{Continuous measurements: matrix Riccati ODE (Kalman--Bucy)}
+If measurements are available continuously,
+\begin{equation}
+  \z(t) = \bm{h}\big(\x(t),t\big) + \bm{v}(t), \qquad
+  \mathbb{E}\!\left[\bm{v}(t)\bm{v}^\top(\tau)\right] = \Rm(t)\,\delta(t-\tau),
+  \quad \Rm(t)\succ 0,
+\end{equation}
+with $\bm{v}$ uncorrelated with $\bm{w}$, the extended Kalman--Bucy filter is
+\begin{align}
+  \dot{\xh}(t) &= \bm{f}\big(\xh(t),\bm{u}(t),t\big)
+                 + \Km(t)\Big[\z(t) - \bm{h}\big(\xh(t),t\big)\Big], \\
+  \Km(t) &= \Pm(t)\Hm^\top(t)\Rm^{-1}(t), \\
+  \dot{\Pm}(t) &= \Fm(t)\Pm(t) + \Pm(t)\Fm^\top(t) + \Gm(t)\Qm(t)\Gm^\top(t)
+                 - \Pm(t)\Hm^\top(t)\Rm^{-1}(t)\Hm(t)\Pm(t),
+  \label{eq:riccati}
+\end{align}
+with $\Hm(t) = \partial\bm{h}/\partial\x\,\big|_{\xh(t)}$ and
+$\Pm(t_0) = \Pm_0 \succ 0$.
+
+Equation~\eqref{eq:riccati} is the matrix Riccati differential equation.
+The terms $\Fm\Pm + \Pm\Fm^\top$ transport uncertainty through the dynamics,
+$\Gm\Qm\Gm^\top$ injects uncertainty from process noise, and
+$-\Pm\Hm^\top\Rm^{-1}\Hm\Pm$ removes uncertainty through measurement information.
+
+\paragraph{Relation to the continuous--discrete filter.}
+Between discrete measurement times no information is received, so the
+quadratic term is absent and the Riccati equation reduces to the Lyapunov
+equation~\eqref{eq:lyapunov} on $t\in(t_{k-1},t_k)$. The information removal
+then occurs impulsively at each $t_k$ through the discrete (Joseph-form)
+update below. In the limit of densely sampled measurements with
+$\Rm_k = \Rm(t_k)/\Delta t$, the discrete filter recovers~\eqref{eq:riccati}.
+
+\paragraph{Positive definiteness.}
+For $\Pm_0\succ 0$ and $\Rm(t)\succ 0$, the solution of~\eqref{eq:riccati}
+remains symmetric positive definite for all $t\ge t_0$ in exact arithmetic.
+Numerically, integrate the $n(n+1)/2$ independent entries (or a square-root
+factor) to preserve symmetry.
+
+\section*{Measurement update (Joseph form)}
+\begin{align}
+  \tilde{\z}_k &= \z_k - \bm{h}\big(\xh_k^-,t_k\big)
+     && \text{(innovation)} \\
+  \Sm_k &= \Hm_k\Pm_k^-\Hm_k^\top + \Rm_k
+     && \text{(innovation covariance)} \\
+  \Km_k &= \Pm_k^-\Hm_k^\top\Sm_k^{-1}
+     && \text{(gain)} \\
+  \xh_k^+ &= \xh_k^- + \Km_k\tilde{\z}_k
+     && \text{(state update)} \\
+  \Pm_k^+ &= \big(\Id-\Km_k\Hm_k\big)\Pm_k^-\big(\Id-\Km_k\Hm_k\big)^\top
+             + \Km_k\Rm_k\Km_k^\top
+     && \text{(Joseph form)}
+\end{align}
+
+For the optimal gain this reduces analytically to
+\begin{equation}
+  \Pm_k^+ = \big(\Id-\Km_k\Hm_k\big)\Pm_k^-,
+\end{equation}
+but the Joseph form remains symmetric positive semidefinite under round-off
+and is valid for any (possibly suboptimal) $\Km_k$.
+
+\appendix
+\section{Radial Process Noise with Variable Separation}
+
+Let $\mathbf{d}=\mathbf{p}_2-\mathbf{p}_1$ and
+$\mathbf{e}=\mathbf{d}/\norm{\mathbf{d}}$. Model uncertainty in the tether
+tension as a scalar, zero-mean white Gaussian input $\xi_T(t)$ with spectral
+density $q_T(t)$:
+\begin{equation}
+  \mathbb{E}\!\left[\xi_T(t)\xi_T(\tau)\right]
+  =q_T(t)\delta(t-\tau).
+\end{equation}
+The deterministic accelerations are first computed from the constrained
+equations, including the correction $\mathbf{q}$ in equation~13 of
+\texttt{derivations/lagrangian\_based.tex}. The stochastic radial
+acceleration is then added to that deterministic result, rather than passed
+through the Lagrange-multiplier constraint solve.
+
+Use normalized masses $\bar m_1=1-\eta$ and $\bar m_2=\eta$, and interpret
+$\xi_T$ as an equal-and-opposite perturbing force per unit total mass. Its
+acceleration contributions are obtained from the normalized force balances:
+\begin{align*}
+  (1-\eta)\,\delta\ddot{\mathbf{p}}_1 &= \mathbf{e}\xi_T, &
+  \eta\,\delta\ddot{\mathbf{p}}_2 &= -\mathbf{e}\xi_T.
+\end{align*}
+Dividing each equation by its normalized mass gives the acceleration
+perturbations:
+\begin{align*}
+  \delta\ddot{\mathbf{p}}_1 &= \frac{\mathbf{e}}{1-\eta}\xi_T, &
+  \delta\ddot{\mathbf{p}}_2 &= -\frac{\mathbf{e}}{\eta}\xi_T.
+\end{align*}
+Since $\ddot{\mathbf{d}}=\ddot{\mathbf{p}}_2-\ddot{\mathbf{p}}_1$,
+subtracting the first perturbation from the second gives the relative radial
+acceleration:
+\begin{equation}
+  \delta\ddot{\mathbf{d}}
+  =-\left(\frac{1}{\eta}+\frac{1}{1-\eta}\right)\mathbf{e}\xi_T
+  =-\frac{\mathbf{e}}{\eta(1-\eta)}\xi_T.
+\end{equation}
+Consequently, trajectories can depart from the nominal prescribed
+separation; equation~13 supplies the deterministic drift, not a hard
+constraint on each noisy realization.
+
+To place these acceleration perturbations in the EKF state equation, use the
+state ordering
+$\x=[\mathbf{p}_1^\top,\mathbf{p}_2^\top,
+\dot{\mathbf{p}}_1^\top,\dot{\mathbf{p}}_2^\top]^\top$. In the first-order
+state equation, the position derivatives are the velocities, so this
+acceleration noise enters only the velocity-derivative entries. The position
+blocks of the diffusion vector are zero, and its velocity blocks are the
+acceleration coefficients derived above:
+\begin{equation}
+  \Gm_T(\x) =
+  \begin{bmatrix}
+    \mathbf{0}_3\\
+    \mathbf{0}_3\\
+    \mathbf{e}/(1-\eta)\\
+    -\mathbf{e}/\eta
+  \end{bmatrix},
+  \qquad
+  \dot{\Pm} = \Fm\Pm+\Pm\Fm^\top+\Gm_T q_T \Gm_T^\top.
+\end{equation}
+The covariance contribution follows by substituting the scalar input
+coefficient $\Gm_T$ and its spectral density $q_T$ into the general process
+noise term $\Gm\Qm\Gm^\top$ in the covariance propagation equation.
+
+This is a nominal-drift-plus-radial-diffusion approximation: equation~13's
+deterministic correction is retained, but it is not re-solved to cancel the
+added noise. It is therefore not the exact fixed-length constrained model;
+use it when stochastic separation variation is intentionally allowed. If a
+physical tether law is required, model the tether length or compliance
+explicitly and derive both drift and noise from that model. Since
+$\mathbf{e}$ depends on the state, the diffusion is state-dependent; an EKF
+evaluates $\Gm_T$ along the nominal trajectory, yielding a local Gaussian
+approximation.
+
+\section{Transverse Process Noise}
+
+Let
+\begin{equation}
+  \mathbf{d}=\mathbf{p}_2-\mathbf{p}_1,\qquad
+  \mathbf{e}=\frac{\mathbf{d}}{\norm{\mathbf{d}}},\qquad
+  \mathbf{P}_\perp=\mathbf{I}_3-\mathbf{e}\mathbf{e}^\top.
+\end{equation}
+The matrix $\mathbf{P}_\perp$ projects onto the plane perpendicular to the
+tether direction. Model an uncertain transverse force per unit total mass
+using a zero-mean white Gaussian vector input $\bm{\xi}_\perp(t)$:
+\begin{equation}
+  \mathbb{E}\!\left[
+    \bm{\xi}_\perp(t)\bm{\xi}_\perp^\top(\tau)
+  \right]
+  =q_\perp(t)\mathbf{I}_3\delta(t-\tau).
+\end{equation}
+The equal-and-opposite normalized force perturbations are
+\begin{equation}
+  \delta\mathbf{f}_1(t)=\mathbf{P}_\perp\bm{\xi}_\perp(t),\qquad
+  \delta\mathbf{f}_2(t)=-\mathbf{P}_\perp\bm{\xi}_\perp(t).
+\end{equation}
+Although the input is written as a three-vector, projection removes its
+component along $\mathbf{e}$, leaving two independent transverse directions.
+
+Using normalized masses $\bar m_1=1-\eta$ and $\bar m_2=\eta$, divide the
+force perturbations by the respective masses to obtain
+\begin{align}
+  \delta\ddot{\mathbf{p}}_1
+    &=\frac{\mathbf{P}_\perp\bm{\xi}_\perp}{1-\eta}, &
+  \delta\ddot{\mathbf{p}}_2
+    &=-\frac{\mathbf{P}_\perp\bm{\xi}_\perp}{\eta}, \\
+  \delta\ddot{\mathbf{d}}
+    &=-\left(\frac{1}{1-\eta}+\frac{1}{\eta}\right)
+      \mathbf{P}_\perp\bm{\xi}_\perp
+    =-\frac{\mathbf{P}_\perp\bm{\xi}_\perp}{\eta(1-\eta)}.
+\end{align}
+The relative acceleration is perpendicular to the current separation,
+because $\mathbf{d}^\top\mathbf{P}_\perp=\mathbf{0}^\top$. Thus this noise
+has no instantaneous radial-acceleration component.
+
+For the state ordering
+$\x=[\mathbf{p}_1^\top,\mathbf{p}_2^\top,
+\dot{\mathbf{p}}_1^\top,\dot{\mathbf{p}}_2^\top]^\top$, define
+\begin{equation}
+  \Gm_\perp(\x)=
+  \begin{bmatrix}
+    \mathbf{0}_{3\times3}\\
+    \mathbf{0}_{3\times3}\\
+    \mathbf{P}_\perp/(1-\eta)\\
+    -\mathbf{P}_\perp/\eta
+  \end{bmatrix},\qquad
+  \dot{\Pm}=\Fm\Pm+\Pm\Fm^\top
+    +\Gm_\perp(q_\perp\mathbf{I}_3)\Gm_\perp^\top.
+\end{equation}
+For this purely transverse input, passing the unconstrained acceleration
+noise through the acceleration map in equation~13 gives the same result:
+the map corrects only the relative component parallel to $\mathbf{d}$, and
+$\mathbf{P}_\perp$ has no such component. With an initially constraint-
+consistent state and deterministic drift that enforces the acceleration-
+level constraint, this continuous-time diffusion does not inject noise into
+the fixed-length or radial-velocity constraints. A finite-step numerical
+integrator may nevertheless accumulate constraint error, which should be
+monitored (and, if necessary, controlled with a constraint-consistent
+integrator). Since $\mathbf{P}_\perp$ depends on the state, an EKF evaluates
+$\Gm_\perp$ along the nominal trajectory.
+
+\section{Sensors}\label{sec:sensors}
+
+Table~\ref{tab:sensor_list} lists the candidate sensors; the subsections below carry the details for each.
+
+{\footnotesize
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.15}
+\begin{longtable}{@{}r p{0.38\linewidth} p{0.20\linewidth} p{0.16\linewidth} p{0.12\linewidth}@{}}
+\caption{Candidate sensors.}\label{tab:sensor_list}\\
+\toprule
+\# & Sensor & Sensor model & Jacobian & Cadence \\
+\midrule
+\endfirsthead
+\toprule
+\# & Sensor & Sensor model & Jacobian & Cadence \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+1 & Ground optical angles, $\mathbf{r}_1$ & $\begin{aligned}\alpha &= h_1(\mathbf{r}_1) \\ \delta &= h_2(\mathbf{r}_1) \end{aligned}$ & & \\
+\midrule
+2 & Ground optical angles, $\mathbf{r}_2$ & $\begin{aligned}\alpha &= h_1(\mathbf{r}_2) \\ \delta &= h_2(\mathbf{r}_2) \end{aligned}$ & & \\
+\midrule
+3 & Ground optical angles, $\mathbf{r}_3$ & $\begin{aligned}\alpha &= h_1(\mathbf{r}_3) \\ \delta &= h_2(\mathbf{r}_3) \end{aligned}$ & & \\
+\midrule
+4 & Optical relative-geometry angles, $\mathbf{r}_3 - \mathbf{r}_2$ & $\begin{aligned}\alpha &= h_1(\mathbf{r}_3 - \mathbf{r}_2) \\ \delta &= h_2(\mathbf{r}_3 - \mathbf{r}_2) \end{aligned}$ & & \\
+\midrule
+5 & Star trackers, tether orientation, $\mathbf{r}_2 - \mathbf{r}_1$ & $\begin{aligned}\alpha &= h_1(\mathbf{r}_2 - \mathbf{r}_1) \\ \delta &= h_2(\mathbf{r}_2 - \mathbf{r}_1) \end{aligned}$ & & \\
+\midrule
+6 & Optical angular size of tether in payload sky, $\mathbf{r}_1, \mathbf{r}_2, \mathbf{r}_3$ & $\theta = h_3(\mathbf{r}_1, \mathbf{r}_2, \mathbf{r}_3)$ & & \\
+\midrule
+7 & DSN ground radar range, $\mathbf{r}_1$ & $r = h_4(\mathbf{r}_1)$ & & \\
+\midrule
+8 & DSN ground radar range, $\mathbf{r}_2$ & $r = h_4(\mathbf{r}_2)$ & & \\
+\midrule
+9 & DSN ground radar range, $\mathbf{r}_3$ & $r = h_4(\mathbf{r}_3)$ & & \\
+\midrule
+10 & DSN ground radar range rate, $\mathbf{r}_1$ & $\dot{r} = h_5(\mathbf{r}_1, \dot{\mathbf{r}}_1)$ & & \\
+\midrule
+11 & DSN ground radar range rate, $\mathbf{r}_2$ & $\dot{r} = h_5(\mathbf{r}_2, \dot{\mathbf{r}}_2)$ & & \\
+\midrule
+12 & DSN ground radar range rate, $\mathbf{r}_3$ & $\dot{r} = h_5(\mathbf{r}_3, \dot{\mathbf{r}}_3)$ & & \\
+\midrule
+13 & Dedicated RF ranging crosslink, tether length, $\mathbf{r}_2 - \mathbf{r}_1$ & $ r = h_4(\mathbf{r}_2 - \mathbf{r}_1)$ & & \\
+\midrule
+14 & Doppler from RF ranging crosslink, $\dot{L}$, $\mathbf{r}_2 - \mathbf{r}_1$ & $\dot{r} = h_5(\mathbf{r}_2 - \mathbf{r}_1, \dot{\mathbf{r}}_2 - \dot{\mathbf{r}}_1)$ & & \\
+\midrule
+15 & Dedicated RF ranging crosslink, payload relative position, $\mathbf{r}_3 - \mathbf{r}_2$ & $ r = h_4(\mathbf{r}_3 - \mathbf{r}_2)$ & & \\
+\midrule
+16 & Doppler from RF ranging crosslink, payload relative in-track speed, $\mathbf{r}_3 - \mathbf{r}_2$ & $\dot{r} = h_5(\mathbf{r}_3 - \mathbf{r}_2, \dot{\mathbf{r}}_3 - \dot{\mathbf{r}}_2)$ & & \\
+\midrule
+17 & Lunar PN\&T position/velocity, $\mathbf{r}_1$, $\dot{\mathbf{r}}_1$ & $\begin{bmatrix}
+  \mathbf{r}_1 \\
+  \dot{\mathbf{r}}_1
+\end{bmatrix}$ & & \\
+\midrule
+18 & Lunar PN\&T position/velocity, $\mathbf{r}_2$, $\dot{\mathbf{r}}_2$ & $\begin{bmatrix}
+  \mathbf{r}_2 \\
+  \dot{\mathbf{r}}_2
+\end{bmatrix}$ & & \\
+\midrule
+19 & Lunar PN\&T position/velocity, $\mathbf{r}_3$, $\dot{\mathbf{r}}_3$ & $\begin{bmatrix}
+  \mathbf{r}_3 \\
+  \dot{\mathbf{r}}_3
+\end{bmatrix}$ & & \\
+\midrule
+20 & Accelerometer on $m_1$ & Noise plus bias & & \\
+\midrule
+21 & Accelerometer on $m_2$ & Noise plus bias & & \\
+\midrule
+22 & Accelerometer on $m_3$ & Noise plus bias & & \\
+\end{longtable}
+}
+
+\subsection{Model listing}
+
+Angles measurement, input position vector $\alpha = h_1(\boldsymbol{\rho}_1)$, $\delta = h_2(\boldsymbol{\rho}_1)$
+
+\begin{equation}
+  \alpha = \arctan\left[\frac{\boldsymbol{\rho}_1 \cdot \hat{\mathbf{y}}}{\boldsymbol{\rho}_1 \cdot \hat{\mathbf{x}}} \right]
+\end{equation}
+
+\begin{equation}
+  \delta = \arcsin\left[\frac{\boldsymbol{\rho}_1 \cdot \hat{\mathbf{z}}}{\|\boldsymbol{\rho}_1\|} \right]
+\end{equation}
+
+Angular size measurement, input position vectors $\boldsymbol{\rho}_1$ and $\boldsymbol{\rho}_2$, $\theta = h_3(\boldsymbol{\rho}_1, \boldsymbol{\rho}_2)$
+
+\begin{equation}
+  \theta = \arccos\left[\frac{\boldsymbol{\rho}_1 \cdot \boldsymbol{\rho}_2}{\|\boldsymbol{\rho}_1\| \|\boldsymbol{\rho}_2\|} \right]
+\end{equation}
+
+Range measurement, input position vector $\boldsymbol{\rho}_1$, $r = h_4(\boldsymbol{\rho}_1)$
+
+\begin{equation}
+  r = \norm{\boldsymbol{\rho}_1}
+\end{equation}
+
+Range rate measurement, input position vectors $\boldsymbol{\rho}_1$ and velocity vectors $\dot{\boldsymbol{\rho}}_1$, $\dot{r} = h_5(\boldsymbol{\rho}_1, \dot{\boldsymbol{\rho}}_1)$
+
+\begin{equation}
+  \dot{r} = \frac{\boldsymbol{\rho}_1 \cdot \dot{\boldsymbol{\rho}}_1}{\|\boldsymbol{\rho}_1\|}
+\end{equation}
+
+\end{document}

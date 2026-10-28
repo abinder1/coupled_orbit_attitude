@@ -1,0 +1,442 @@
+\documentclass[11pt]{article}
+
+%%%%%%%%%%%%% Package imports %%%%%%%%%%%%%
+% Uses Latin Modern + T1 when available; falls back to default fonts otherwise.
+\IfFileExists{lmodern.sty}%
+  {\usepackage[T1]{fontenc}\usepackage{lmodern}\usepackage{microtype}}%
+  {\usepackage[expansion=false]{microtype}}
+\usepackage[backend=biber, style=numeric]{biblatex}
+\usepackage{enumitem}
+\usepackage{listings}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{xcolor}
+\usepackage[colorlinks=true,linkcolor=blue!50!black,citecolor=green!35!black,urlcolor=blue!60!black]{hyperref}
+
+\addbibresource{sensor_analyses.bib}
+
+%%%%%%%%%%%%% Macro definitions %%%%%%%%%%%%%
+
+\lstset{basicstyle=\ttfamily\small,columns=fullflexible,keepspaces=true,
+        frame=single,framerule=0.3pt,rulecolor=\color{black!30},
+        commentstyle=\color{green!40!black},keywordstyle=\color{blue!60!black},
+        language=Matlab,showstringspaces=false}
+
+\newcommand{\V}{\mathcal{V}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\Var}{\operatorname{Var}}
+\newcommand{\fh}{\widehat{f}}
+\newcommand{\R}{\mathbb{R}}
+
+\newlist{reading}{description}{1}
+\setlist[reading]{font=\normalfont\itshape,leftmargin=1.6em,labelindent=0pt,itemsep=2pt,topsep=2pt}
+
+%%%%%%%%%%%%% Title card content %%%%%%%%%%%%%
+\title{Statistical Analyses for an Exhaustive Sensor-Selection Dataset}
+\author{Andrew}
+\date{October 23, 2026}
+
+%%%%%%%%%%%%% Begin document %%%%%%%%%%%%%
+\begin{document}
+\maketitle
+
+\begin{abstract}
+The dataset assigns an uncertainty metric to every one of the $2^k$ sensor packages, with $k\approx 16$--$20$.
+Because every combination is evaluated, the dataset is the entire set function rather than a sample of it, so each analysis below can be computed exactly.
+This note sets out ten analyses, from the full factorial (Walsh--Hadamard) decomposition to sample-efficiency studies, together with checks to run beforehand.
+Each section states the governing mathematics, what to report, and a short reading list split into sources for the \emph{mathematics} and sources for \emph{applying and discussing} the method.
+\end{abstract}
+
+\tableofcontents
+
+%=====================================================================
+\section{Setting and notation}\label{sec:notation}
+
+Let $\V=\{1,\dots,k\}$ index the candidate sensors.
+A package is a subset $S\subseteq\V$, equivalently a bit vector $x\in\{0,1\}^k$ with $x_i=1$ if sensor $i$ is included.
+Store the data as a vector of length $2^k$ indexed by the bitmask
+\[
+  n(S)=\sum_{i\in S}2^{\,i-1}\qquad(\text{MATLAB index } n(S)+1).
+\]
+Let $f(S)$ denote the uncertainty metric (smaller is better).
+Several analyses are cleaner in terms of a \emph{gain} to be maximized,
+\[
+  g(S)=f(\varnothing)-f(S),
+\]
+or an information-type gain such as $J(S)=-\log\det P(S)$.
+For an EKF, $f(\varnothing)$ may be unbounded because the state is unobservable without sensors.
+In that case, define $g$ relative to a fixed baseline package, cap $f$ at a large value, or work with $J$; state the choice explicitly, because submodularity and Shapley values depend on it.
+
+Two transforms of $f$ appear repeatedly, and both cost $O(k\,2^k)$ operations, about $2\times10^7$ at $k=20$.
+
+\paragraph{Walsh (Fourier) expansion.}
+With $\pm1$ coding $s_i=2x_i-1$ and characters $\chi_T(x)=\prod_{i\in T}s_i$,
+\begin{equation}\label{eq:walsh}
+  f(x)=\sum_{T\subseteq\V}\fh(T)\,\chi_T(x),\qquad
+  \fh(T)=2^{-k}\sum_{x}f(x)\,\chi_T(x),\qquad
+  \Var f=\sum_{T\neq\varnothing}\fh(T)^2 .
+\end{equation}
+The variance is taken over the uniform distribution on packages (Parseval).
+In classical factorial-design terms, the ``effect'' of term $T$ equals $2\fh(T)$.
+
+\paragraph{M\"obius (Harsanyi) expansion.}
+\begin{equation}\label{eq:mobius}
+  f(S)=\sum_{T\subseteq S}m(T),\qquad
+  m(T)=\sum_{R\subseteq T}(-1)^{|T\setminus R|}f(R).
+\end{equation}
+Here $m(T)$ is the pure synergy of the sensors in $T$ over and above all of their sub-packages.
+The in-place transform is:
+\begin{lstlisting}
+m = f(:);                              % f indexed by bitmask + 1
+for i = 0:k-1
+    idx = find(bitand(0:2^k-1, 2^i));  % packages containing sensor i+1
+    m(idx) = m(idx) - m(idx - 2^i);
+end
+\end{lstlisting}
+
+\noindent
+\textbf{MATLAB convention.}
+\texttt{fwht(f, 2\textasciicircum k, 'hadamard')} returns $2^{-k}\sum_x f(x)(-1)^{\langle x,T\rangle}$, which uses $+1$ for an \emph{absent} sensor.
+Its output at index $n(T)+1$ therefore equals $(-1)^{|T|}\fh(T)$ in the convention of~\eqref{eq:walsh}.
+Fix the sign once, early on, so that effect signs read as ``including sensor $i$ raises (or lowers) uncertainty.''
+All of the identities in this note were checked numerically on random set functions.
+
+%=====================================================================
+\section{Exact factorial decomposition (Walsh--Hadamard spectrum)}\label{sec:walsh}
+
+A full $2^k$ factorial estimates every main effect and every interaction up to order $k$ exactly, and the fast Walsh--Hadamard transform computes all of them at once.
+The transform is the matrix form of Yates' algorithm for factorial effects \parencite{Yates1937,FinoAlgazi1976}.
+
+\paragraph{What to compute and report.}
+\begin{itemize}[itemsep=2pt]
+  \item \emph{Spectral energy by order.}
+        Report the fraction of variance at each interaction order, $W^{d}=\sum_{|T|=d}\fh(T)^2/\Var f$.
+        If $W^{1}$ dominates, sensors contribute nearly additively.
+        Substantial $W^{2}$ and $W^{3}$ mean performance is driven by combinations.
+  \item \emph{Active-effect screening.}
+        A deterministic simulation leaves no error term, so ANOVA $F$-tests and $p$-values do not apply.
+        Use a half-normal (Daniel) plot of $|2\fh(T)|$ \parencite{Daniel1959}, or Lenth's pseudo-standard-error \parencite{Lenth1989}, to separate the few large effects from the bulk.
+  \item \emph{Response transform.}
+        Compare spectra for $f$, $\log f$, and $J=-\log\det P$.
+        If information adds across sensors, $J$ is close to additive and its spectrum is much sparser than that of $f$.
+        Choosing the scale on which effects are simplest is a classical idea \parencite{BoxCox1964}, and the comparison is a reportable finding in its own right.
+\end{itemize}
+
+\paragraph{Further reading.}
+\begin{reading}
+  \item[Mathematics.] \textcite[Ch.~1--3]{ODonnell2014} is a rigorous, readable treatment of Fourier expansions on $\{-1,1\}^k$, spectral weight by degree, and influences.
+        \textcite{FinoAlgazi1976} cover the fast transform and its orderings.
+  \item[Applying it.] \textcite[Ch.~5--6]{BoxHunterHunter2005} and \textcite[Ch.~4]{WuHamada2009} interpret $2^k$ effects, half-normal plots, and effect sparsity.
+        \textcite[Ch.~6]{Montgomery2017} is a standard textbook treatment.
+        \textcite{Lenth1989} is short and directly usable.
+        \textcite{MathWorksFWHT} documents the MATLAB ordering and scaling options.
+\end{reading}
+
+%=====================================================================
+\section{Variance-based (Sobol') sensitivity}\label{sec:sobol}
+
+Treat each $x_i$ as an independent fair coin.
+The functional ANOVA (Hoeffding--Sobol') decomposition then coincides with the Walsh expansion, so the Sobol' indices come directly from \S\ref{sec:walsh}:
+\begin{equation}
+  S_i=\frac{\fh(\{i\})^2}{\Var f},\qquad
+  S_i^{T}=\frac{\sum_{T\ni i}\fh(T)^2}{\Var f}.
+\end{equation}
+The total index $S_i^T$ equals the normalized \emph{influence} of coordinate $i$ in \textcite[\S2.2]{ODonnell2014}.
+The gap $S_i^T-S_i$ measures how much of a sensor's importance depends on which other sensors are present.
+
+\paragraph{Non-uniform inclusion.}
+If sensor $i$ is included with probability $p_i$, for example to reflect affordability, use the $p$-biased Fourier basis \parencite[Ch.~8]{ODonnell2014}.
+Alternatively, compute the indices by weighting the $2^k$ evaluations with the product measure $\prod_i p_i^{x_i}(1-p_i)^{1-x_i}$.
+Both are exact.
+
+\paragraph{Further reading.}
+\begin{reading}
+  \item[Mathematics.] \textcite{Sobol1993} introduces the indices.
+        \textcite{HommaSaltelli1996} introduce total-effect indices.
+        \textcite[Ch.~8]{ODonnell2014} develops the $p$-biased basis.
+  \item[Applying it.] \textcite{Saltelli2008} is the standard practitioner's primer, including how to phrase and present results.
+        \textcite{Santner2018} places sensitivity analysis in the context of deterministic computer experiments.
+\end{reading}
+
+%=====================================================================
+\section{Shapley and Banzhaf values: what each sensor is worth}\label{sec:shapley}
+
+Treat the sensors as players in a cooperative game with value $v=g$, the uncertainty reduction.
+The Shapley value \parencite{Shapley1953} is
+\begin{equation}
+  \phi_i=\sum_{S\subseteq\V\setminus\{i\}}\frac{|S|!\,(k-|S|-1)!}{k!}\bigl[v(S\cup\{i\})-v(S)\bigr]
+        =\sum_{T\ni i}\frac{m_v(T)}{|T|},
+\end{equation}
+where $m_v$ is the M\"obius transform~\eqref{eq:mobius} of $v$.
+The right-hand form makes the exact computation $O(k\,2^k)$: each synergy $m_v(T)$ is shared equally among its members.
+The Banzhaf value \parencite{Banzhaf1965} weights all coalitions equally,
+\begin{equation}
+  \beta_i=2^{-(k-1)}\sum_{S\subseteq\V\setminus\{i\}}\bigl[v(S\cup\{i\})-v(S)\bigr]=2\,\widehat{v}(\{i\}),
+\end{equation}
+so it equals the main effect from \S\ref{sec:walsh}.
+
+\paragraph{What to report.}
+Present a table of $\phi_i$ and $\beta_i$ for all sensors.
+Because $\sum_i\phi_i=v(\V)$, the Shapley values give an exact attribution of the full-suite performance.
+Where $\phi_i$ and $\beta_i$ rank sensors differently, the sensor's marginal value depends strongly on package size, and plotting $v(S\cup\{i\})-v(S)$ against $|S|$ shows the pattern.
+
+\paragraph{Further reading.}
+\begin{reading}
+  \item[Mathematics.] \textcite{Shapley1953} and \textcite{Banzhaf1965} are the original sources.
+        \textcite{Grabisch2016} unifies the M\"obius, Shapley, and Banzhaf representations of set functions.
+        \textcite{Owen2014} connects Shapley values to Sobol' indices: the Shapley effect lies between $S_i$ and $S_i^T$.
+  \item[Applying it.] \textcite{Plischke2021} give exact $2^k$-evaluation algorithms via the M\"obius inverse, which is precisely your setting.
+        \textcite{Song2016} discuss interpretation and estimation.
+        \textcite{LundbergLee2017} and \textcite{Molnar2022} show how Shapley attributions are presented and explained to non-specialists.
+\end{reading}
+
+%=====================================================================
+\section{Diminishing returns: submodularity testing}\label{sec:submod}
+
+The gain $g$ is \emph{submodular} if each sensor adds less to larger packages.
+For all $S\subseteq T$ and $i\notin T$,
+\begin{equation}\label{eq:submod}
+  g(S\cup\{i\})-g(S)\;\ge\;g(T\cup\{i\})-g(T).
+\end{equation}
+An equivalent and much cheaper test checks only the local second differences:
+\begin{equation}\label{eq:secdiff}
+  \Delta_{ij}g(S)=g(S\cup\{i,j\})-g(S\cup\{i\})-g(S\cup\{j\})+g(S)\le 0
+  \quad\forall\,S,\;i\neq j\notin S.
+\end{equation}
+There are $\binom{k}{2}2^{k-2}$ such terms, about $5\times10^7$ at $k=20$, which is fast to compute.
+Their average over $S$ is $4\widehat{g}(\{i,j\})$.
+
+\paragraph{Why this is interesting for an EKF.}
+For linear-Gaussian estimation, some objectives are provably submodular.
+Shamaiah et al.\ showed that the log-determinant objective is, which gives the $(1-1/e)$ greedy guarantee \parencite{Nemhauser1978,Shamaiah2010}.
+\textcite{Tzoumas2016} showed that $\log\det$ of the Kalman error covariance is supermodular, so its reduction is submodular.
+The trace (MSE) objective, by contrast, is generally \emph{not} submodular, and greedy selection can be arbitrarily bad for it \parencite{Ye2018}.
+In a nonlinear filter, a measurement that restores observability can make a previously useless sensor valuable, a complementarity that violates~\eqref{eq:submod}.
+Your dataset shows which of these regimes your metric is in.
+
+\paragraph{What to compute and report.}
+\begin{itemize}[itemsep=2pt]
+  \item The fraction of~\eqref{eq:secdiff} terms that are positive, their magnitude distribution, and which pairs $(i,j)$ account for them.
+  \item The submodularity ratio of \textcite{DasKempe2011},
+        \[
+          \gamma_{U,r}=\min_{L\subseteq U,\;|S|\le r,\;S\cap L=\varnothing}
+          \frac{\sum_{x\in S}\bigl[g(L\cup\{x\})-g(L)\bigr]}{g(L\cup S)-g(L)},
+        \]
+        where $\gamma\ge 1$ for submodular $g$.
+        An exhaustive minimum costs about $3^k$ evaluations ($4.3\times10^7$ at $k=16$, $3.5\times10^9$ at $k=20$).
+        Restrict $r$ or $U$ for the larger case.
+  \item An exact greedy benchmark.
+        For each cardinality $n$, compare greedy, reverse-greedy (pruning), and other heuristics with the true optimum $S_n^\star$.
+        Compare the observed ratio with the guarantee $\frac{1}{\alpha}\bigl(1-e^{-\alpha\gamma}\bigr)$ of \textcite{Bian2017}, where $\alpha$ is the generalized curvature.
+        Most sensor-selection papers can only bound this gap; you can measure it.
+\end{itemize}
+
+\paragraph{Further reading.}
+\begin{reading}
+  \item[Mathematics.] \textcite{Nemhauser1978} prove the greedy bound.
+        \textcite{DasKempe2011} define the submodularity ratio and \textcite{Bian2017} extend the guarantees to non-submodular functions.
+        \textcite[\S2, \S11]{Bach2013} cover equivalent definitions, including~\eqref{eq:secdiff}.
+  \item[Applying it.] \textcite{KrauseGolovin2014} is a readable survey with sensor-placement examples.
+        \textcite{Krause2008} is a model of how to present a sensor-selection study built on submodularity.
+        \textcite{Shamaiah2010}, \textcite{Tzoumas2016}, and \textcite{Ye2018} are the Kalman-filter-specific results to position your findings against.
+\end{reading}
+
+%=====================================================================
+\section{Redundancy and complementarity structure}\label{sec:network}
+
+Form the $k\times k$ interaction matrix $W$ in one of two ways:
+\begin{itemize}[itemsep=2pt]
+  \item the Banzhaf interaction $W_{ij}=4\widehat{g}(\{i,j\})$, the average of~\eqref{eq:secdiff};
+  \item the Shapley interaction index \parencite{GrabischRoubens1999},
+        \[
+          I_{ij}=\sum_{S\subseteq\V\setminus\{i,j\}}\frac{|S|!\,(k-|S|-2)!}{(k-1)!}\,\Delta_{ij}g(S).
+        \]
+\end{itemize}
+Negative entries mark \emph{substitutes} (redundant sensors) and positive entries mark \emph{complements} (synergistic sensors).
+
+\paragraph{What to report.}
+Show a heat map of $W$ with rows and columns ordered by hierarchical clustering.
+Then treat $W$ as a signed graph and find communities, for example with the signed Potts or modularity method of \textcite{TraagBruggeman2009}.
+Communities that line up with measurement physics (angles-only, range and range-rate, inertial, tether-tension) make a strong, interpretable result.
+
+\paragraph{Further reading.}
+\begin{reading}
+  \item[Mathematics.] \textcite{GrabischRoubens1999} axiomatize the Shapley and Banzhaf interaction indices and give their pseudo-Boolean forms.
+        \textcite{RabittiBorgonovo2019} define the Shapley--Owen interaction effect and interpret its sign as synergy or antagonism.
+  \item[Applying it.] \textcite{TraagBruggeman2009} cover community detection with positive and negative links.
+        \textcite{Grabisch2016} discusses how interaction indices are read in decision problems.
+\end{reading}
+
+%=====================================================================
+\section{Pareto and cardinality analysis}\label{sec:pareto}
+
+With a cost $c_i$ per sensor (mass, power, price, or simply $c_i=1$), every package is a point $\bigl(c(S),f(S)\bigr)$ with $c(S)=\sum_{i\in S}c_i$, and the exact Pareto frontier is found by a single sweep over the $2^k$ points.
+
+\paragraph{What to report.}
+\begin{itemize}[itemsep=2pt]
+  \item The frontier $f^\star(n)=\min_{|S|=n}f(S)$ and the optimal packages $S_n^\star$.
+  \item \emph{Nestedness}: whether $S_n^\star\subseteq S_{n+1}^\star$ for every $n$.
+        Any failure means the best path of incremental upgrades is not optimal at every stage, a result relevant to program planning.
+  \item \emph{Near-optimal sets}.
+        Define $\mathcal{A}_n(\varepsilon)=\{S:|S|=n,\ f(S)\le(1+\varepsilon)f^\star(n)\}$.
+        Sensors in $\bigcap\mathcal{A}_n(\varepsilon)$ are essential at that size; sensors absent from $\bigcup\mathcal{A}_n(\varepsilon)$ are dispensable.
+        Reporting $|\mathcal{A}_n(\varepsilon)|$ shows how flexible the design space is.
+\end{itemize}
+
+\paragraph{Further reading.}
+\begin{reading}
+  \item[Mathematics.] \textcite{Ehrgott2005} covers Pareto optimality and the weighted-sum and $\varepsilon$-constraint scalarizations.
+  \item[Applying it.] \textcite{Krause2008} present cardinality-performance curves for sensor placement, including comparisons with the optimum on small instances.
+\end{reading}
+
+%=====================================================================
+\section{Observability and threshold rules}\label{sec:boolean}
+
+Define the indicator of acceptable performance, $h(S)=\mathbf{1}[f(S)\le\tau]$, for a requirement $\tau$; packages that leave the state unobservable \parencite{HermannKrener1977} give $f=\infty$ and $h=0$.
+If $f$ is monotone (\S\ref{sec:sanity}), then $h$ is a \emph{positive} Boolean function.
+Its unique minimal disjunctive normal form is the disjunction of its minimal true points, which are exactly the \emph{minimal sufficient packages}: packages that meet $\tau$ but fail if any one sensor is removed \parencite{CramaHammer2011}.
+A conjunctive form such as $(A\lor B)\land C\land(D\lor E\lor F)$ comes from the minimal false points, the dual description, and is often the easier rule to state in a paper.
+
+\paragraph{What to report.}
+For each requirement level $\tau$, list the minimal sufficient packages and the CNF rule.
+How the rule changes as $\tau$ tightens shows which sensors become mandatory first.
+If $f$ is not monotone, use Quine--McCluskey \parencite{Quine1952,McCluskey1956} or Espresso \parencite{Brayton1984} to minimize $h$ as a general Boolean function.
+
+\paragraph{Further reading.}
+\begin{reading}
+  \item[Mathematics.] \textcite{CramaHammer2011} is the reference for positive Boolean functions, prime implicants, and duality.
+        \textcite{HermannKrener1977} cover nonlinear observability, which explains why some packages give $f=\infty$.
+  \item[Applying it.] \textcite{Quine1952} and \textcite{McCluskey1956} describe the exact algorithm in tutorial style.
+        \textcite{Brayton1984} documents Espresso, the standard heuristic for larger instances.
+\end{reading}
+
+%=====================================================================
+\section{Robustness to sensor failure}\label{sec:robust}
+
+\paragraph{Worst-case single failure.}
+For each package, let $r_1(S)=\max_{i\in S}f(S\setminus\{i\})$.
+Plot the two-objective frontier of nominal $f(S)$ against $r_1(S)$ at each cardinality.
+Extending this to $\beta$ failures gives the resilient selection problem of \textcite{Tzoumas2017}.
+
+\paragraph{Expected performance under random failures.}
+Suppose each sensor survives independently with probability $q_i$.
+Failures only \emph{remove} sensors, so the right exact tool is the M\"obius expansion~\eqref{eq:mobius}, not a symmetric bit-flip noise operator:
+\begin{equation}
+  \E\bigl[f(S\cap R)\bigr]=\sum_{T\subseteq S}m(T)\prod_{i\in T}q_i .
+\end{equation}
+This is a weighted zeta transform, computed for all $S$ at once in $O(k\,2^k)$.
+Where the nominally best package differs from the best package in expectation, that difference is a key design takeaway.
+
+\paragraph{Further reading.}
+\begin{reading}
+  \item[Mathematics.] \textcite{Tzoumas2017} cover resilient (worst-case removal) submodular maximization and curvature-dependent guarantees.
+        \textcite{Grabisch2016} gives the M\"obius and zeta transforms used above.
+  \item[Applying it.] \textcite{KrauseRobust2008} present robust observation selection, including trading off expected-case against worst-case performance and robustness to node failures.
+\end{reading}
+
+%=====================================================================
+\section{Landscape analysis on the hypercube}\label{sec:landscape}
+
+Treat the $2^k$ packages as a landscape whose neighbors differ by one sensor (Hamming distance~1).
+
+\paragraph{What to compute and report.}
+\begin{itemize}[itemsep=2pt]
+  \item The number and locations of local minima, packages that no single add or drop improves.
+        Many local minima mean swap-based heuristics can get trapped.
+  \item The random-walk autocorrelation, which follows from the Walsh spectrum because the characters $\chi_T$ are eigenvectors of the hypercube graph:
+        \begin{equation}
+          r(s)=\frac{\sum_{T\neq\varnothing}\fh(T)^2\,\bigl(1-2|T|/k\bigr)^{s}}{\sum_{T\neq\varnothing}\fh(T)^2},
+          \qquad \ell=-1/\ln r(1).
+        \end{equation}
+        A short correlation length $\ell$ indicates a rugged landscape dominated by high-order interactions.
+  \item The distribution of $f$ over all packages.
+        Multimodality often splits on one observability-critical sensor.
+\end{itemize}
+
+\paragraph{Further reading.}
+\begin{reading}
+  \item[Mathematics.] \textcite{Weinberger1990} introduces the autocorrelation and correlation length.
+        \textcite{Stadler1996} derives the spectral (Walsh/Fourier) form of landscape correlation functions on the hypercube.
+  \item[Applying it.] \textcite{MalanEngelbrecht2013} survey landscape-analysis measures and how to report them.
+\end{reading}
+
+%=====================================================================
+\section{Sample-efficiency study}\label{sec:sample}
+
+Because you have the ground truth, you can measure how few simulations would have sufficed, which matters once $k$ grows beyond exhaustive reach.
+
+\paragraph{Comparisons to run.}
+\begin{itemize}[itemsep=2pt]
+  \item \emph{Regular fractional factorials} $2^{k-p}$ of resolution IV and V \parencite{BoxHunter1961}.
+        Compare their estimated effects with the exact $\fh(T)$ to quantify the aliasing error.
+  \item \emph{Random subsampling with sparse regression}: LASSO \parencite{Tibshirani1996} on the Walsh basis truncated at order $d$.
+        This is compressed sensing of a Fourier-sparse set function \parencite{StobbeKrause2012,Amrollahi2019}.
+        Plot recovery error, and whether the selected optimum is correct, against the number of samples.
+  \item \emph{Adaptive search} for the optimum, such as Bayesian optimization over binary inputs \parencite{BaptistaPoloczek2018}.
+        Report the evaluations needed to reach $S_n^\star$.
+\end{itemize}
+
+\paragraph{Further reading.}
+\begin{reading}
+  \item[Mathematics.] \textcite{StobbeKrause2012} prove exact recovery of Fourier-sparse set functions from polylogarithmically many random samples.
+        \textcite{Amrollahi2019} give faster algorithms for low-degree spectra.
+        \textcite{BoxHunter1961} develop $2^{k-p}$ designs and resolution.
+  \item[Applying it.] \textcite[Ch.~5]{WuHamada2009} cover choosing and analyzing fractional factorials.
+        \textcite{BaptistaPoloczek2018} include benchmark comparisons in a format you could mirror.
+\end{reading}
+
+%=====================================================================
+\section{Sanity checks before analysis}\label{sec:sanity}
+
+\paragraph{Monotonicity.}
+Count the pairs $(S,i\notin S)$ with $f(S\cup\{i\})>f(S)(1+\text{tol})$; there are $k\,2^{k-1}$ to check.
+For a linear Kalman filter with consistent noise models, adding a measurement cannot increase the posterior covariance.
+In an EKF, a violation can come from linearization error, poor tuning, or divergence.
+Either way it should be found before any interpretation, and it may be a finding in its own right.
+Check filter consistency (for example NEES/NIS tests) on the offending packages \parencite[Ch.~5]{BarShalom2001}.
+
+\paragraph{Noise.}
+If $f$ is a Monte Carlo estimate rather than a propagated covariance, replicate a subset of packages to estimate its standard error.
+Effects smaller than that noise floor should not be interpreted, and the half-normal and Lenth methods of \S\ref{sec:walsh} then double as tests against a real error term.
+\textcite{Santner2018} discuss deterministic versus stochastic simulators.
+
+%=====================================================================
+\section{Suggested paper narrative}\label{sec:narrative}
+
+\begin{enumerate}[itemsep=2pt]
+  \item \S\ref{sec:walsh}: show the structure of the response (spectral energy by order, chosen transform).
+  \item \S\ref{sec:shapley} and \S\ref{sec:network}: show which sensors matter and how they interact.
+  \item \S\ref{sec:submod}: tell the diminishing-returns story, with an exact greedy benchmark positioned against the Kalman-filter literature.
+  \item \S\ref{sec:pareto} and \S\ref{sec:robust}: give the design-trade takeaway.
+\end{enumerate}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabularx}{\linewidth}{@{}lXl@{}}
+\toprule
+Analysis & Core quantity & Cost at $k=20$ \\
+\midrule
+Walsh spectrum (\S\ref{sec:walsh})        & $\fh(T)$ for all $T$                            & $O(k2^k)\approx2\times10^7$ \\
+Sobol' (\S\ref{sec:sobol})                & sums of $\fh(T)^2$                              & free from \S\ref{sec:walsh} \\
+Shapley / Banzhaf (\S\ref{sec:shapley})   & $m_v(T)$, $\widehat{v}(\{i\})$                  & $O(k2^k)$ \\
+Submodularity (\S\ref{sec:submod})        & second differences; $\gamma$                    & $5\times10^7$; $\gamma$ up to $3^k$ \\
+Interactions (\S\ref{sec:network})        & $W_{ij}$ or $I_{ij}$                            & as above \\
+Pareto (\S\ref{sec:pareto})               & $f^\star(n)$, $\mathcal{A}_n(\varepsilon)$     & $O(2^k)$ \\
+Boolean rules (\S\ref{sec:boolean})       & minimal true points of $h$                      & $O(k2^k)$ \\
+Robustness (\S\ref{sec:robust})           & $r_1(S)$, weighted zeta transform               & $O(k2^k)$ \\
+Landscape (\S\ref{sec:landscape})         & local minima, $r(s)$                            & $O(k2^k)$ \\
+Sample efficiency (\S\ref{sec:sample})    & recovery error vs.\ samples                     & many small fits \\
+\bottomrule
+\end{tabularx}
+\caption{Analyses, their core quantities, and approximate cost on the full dataset.}
+\end{table}
+
+%%%%%%%%%%%%% Bibliography %%%%%%%%%%%%%
+\printbibliography
+
+\end{document}

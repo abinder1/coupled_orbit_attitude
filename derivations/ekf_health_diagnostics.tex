@@ -1,0 +1,363 @@
+\documentclass[11pt]{article}
+
+%%%%%%%%%%%%% Package imports %%%%%%%%%%%%%
+\usepackage[backend=biber, style=numeric]{biblatex}
+\usepackage{enumitem}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{bm}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage[hidelinks]{hyperref}
+
+\addbibresource{ekf_health_diagnostics.bib}
+
+%%%%%%%%%%%%% Macro definitions %%%%%%%%%%%%%
+\setlist{itemsep=2pt,topsep=4pt}
+
+\newcommand{\x}{\bm{x}}
+\newcommand{\xhat}{\hat{\bm{x}}}
+\newcommand{\e}{\bm{e}}
+\newcommand{\nuv}{\bm{\nu}}
+\newcommand{\Pm}{\bm{P}}
+\newcommand{\Sm}{\bm{S}}
+\newcommand{\Hm}{\bm{H}}
+\newcommand{\Fm}{\bm{F}}
+\newcommand{\Km}{\bm{K}}
+\newcommand{\Qm}{\bm{Q}}
+\newcommand{\Rm}{\bm{R}}
+\newcommand{\Id}{\bm{I}}
+\newcommand{\Phim}{\bm{\Phi}}
+\newcommand{\Jm}{\bm{J}}
+\newcommand{\T}{^{\mathsf{T}}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\chisq}[1]{\chi^2_{#1}}
+
+%%%%%%%%%%%%% Title card content %%%%%%%%%%%%%
+\title{Characterizing the Health and Behavior of an Extended Kalman Filter:\\
+A Catalog of Diagnostic Techniques}
+\author{Andrew}
+\date{\today}
+
+%%%%%%%%%%%%% Begin document %%%%%%%%%%%%%
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This note collects techniques for assessing whether an extended Kalman filter (EKF) is
+consistent, well tuned, numerically sound, and operating within the regime where its
+linearizations are valid. Techniques are grouped by what they diagnose and by whether they
+require knowledge of the true state (simulation only) or can be applied to real data.
+\end{abstract}
+
+\section*{Notation}
+The discrete-time system is
+\begin{align}
+  \x_{k+1} &= \bm{f}(\x_k) + \bm{w}_k, & \bm{w}_k &\sim \mathcal{N}(\bm{0},\Qm_k),\\
+  \bm{z}_k &= \bm{h}(\x_k) + \bm{v}_k, & \bm{v}_k &\sim \mathcal{N}(\bm{0},\Rm_k),
+\end{align}
+with Jacobians $\Fm_k = \partial \bm{f}/\partial\x|_{\xhat_k^+}$ and
+$\Hm_k = \partial \bm{h}/\partial\x|_{\xhat_k^-}$. The state dimension is $n$ and the
+measurement dimension is $m$. The innovation and its predicted covariance are
+\begin{equation}
+  \nuv_k = \bm{z}_k - \bm{h}(\xhat_k^-), \qquad
+  \Sm_k = \Hm_k \Pm_k^- \Hm_k\T + \Rm_k,
+\end{equation}
+and the estimation error is $\e_k = \x_k - \xhat_k^+$. Monte Carlo runs are indexed by
+$i = 1,\dots,N$, and time steps by $k = 1,\dots,K$. The $p$-quantile of the chi-square
+distribution with $d$ degrees of freedom is written $\chisq{d}(p)$.
+
+%======================================================================
+\section{Innovation (Residual) Tests}
+\label{sec:innovation}
+These tests need no truth, so they are the primary diagnostics on real data.
+
+\subsection{Normalized innovation squared (NIS)}
+\begin{equation}
+  \epsilon_{\nu,k} = \nuv_k\T \Sm_k^{-1} \nuv_k \;\sim\; \chisq{m}
+  \quad\text{(if the filter is consistent).}
+\end{equation}
+For a two-sided 95\% test at a single step, accept if
+$\chisq{m}(0.025) \le \epsilon_{\nu,k} \le \chisq{m}(0.975)$.
+Single-step tests are noisy, so use a time average over a window of $K$ steps:
+\begin{equation}
+  \bar{\epsilon}_\nu = \frac{1}{K}\sum_{k=1}^{K} \epsilon_{\nu,k},
+  \qquad K\bar{\epsilon}_\nu \sim \chisq{Km}.
+\end{equation}
+Over $N$ Monte Carlo runs, the ensemble average at each step obeys
+$N\bar{\epsilon}_{\nu,k} \sim \chisq{Nm}$.
+
+\emph{Interpretation:} A NIS that sits too high means the filter is overconfident
+($\Qm$ or $\Rm$ is too small, or there is unmodeled dynamics or bias). A NIS that sits too
+low means the filter is pessimistic ($\Qm$ or $\Rm$ is too large).
+
+\subsection{Innovation whiteness}
+For an optimal filter, the innovations are white. For a scalar innovation sequence (or for
+each component of a vector sequence), the normalized sample autocorrelation at lag $\ell$ is
+\begin{equation}
+  \hat{\rho}(\ell) = \frac{\sum_{k=1}^{K-\ell} \nu_k \nu_{k+\ell}}
+                          {\sum_{k=1}^{K} \nu_k^2},
+  \qquad \hat{\rho}(\ell) \approx \mathcal{N}\!\left(0,\tfrac{1}{K}\right),
+\end{equation}
+so values outside $\pm 1.96/\sqrt{K}$ at more than about 5\% of lags indicate correlation.
+For a vector sequence, the Bar-Shalom form normalizes the inner product
+$\nuv_k\T\nuv_{k+\ell}$ in the same way. To test many lags jointly, use the Ljung--Box
+portmanteau statistic:
+\begin{equation}
+  Q_{\mathrm{LB}} = K(K+2)\sum_{\ell=1}^{L}\frac{\hat{\rho}^2(\ell)}{K-\ell}
+  \;\sim\; \chisq{L}.
+\end{equation}
+\emph{Interpretation:} Colored innovations mean the filter is extracting information
+suboptimally. The usual causes are a mis-tuned $\Qm$, correlated measurement noise, or
+model error.
+
+\subsection{Zero-mean test}
+The sample mean $\bar{\nuv} = K^{-1}\sum_k \nuv_k$ should satisfy
+$K\,\bar{\nuv}\T \bar{\Sm}^{-1} \bar{\nuv} \sim \chisq{m}$, approximately, where
+$\bar{\Sm}$ is the average $\Sm_k$. A nonzero mean points to an unmodeled sensor bias,
+a frame misalignment, or a timing offset.
+
+\subsection{Innovation envelopes and residual ratios}
+\begin{itemize}
+  \item Plot each innovation component against $\pm 3\sqrt{[\Sm_k]_{jj}}$.
+  \item Compare pre-fit residuals $\bm{z}_k - \bm{h}(\xhat_k^-)$ with post-fit residuals
+        $\bm{z}_k - \bm{h}(\xhat_k^+)$. Their ratio shows how strongly each update pulls
+        the state.
+\end{itemize}
+
+%======================================================================
+\section{Truth-Based Consistency (Simulation and Monte Carlo)}
+\label{sec:truth}
+
+\subsection{Normalized estimation error squared (NEES)}
+\begin{equation}
+  \epsilon_k = \e_k\T (\Pm_k^+)^{-1} \e_k \;\sim\; \chisq{n}.
+\end{equation}
+The average NEES (ANEES) over $N$ runs is
+\begin{equation}
+  \bar{\epsilon}_k = \frac{1}{N}\sum_{i=1}^{N}\epsilon_k^{(i)},
+  \qquad N\bar{\epsilon}_k \sim \chisq{Nn},
+\end{equation}
+with the 95\% acceptance region
+$\left[\chisq{Nn}(0.025)/N,\; \chisq{Nn}(0.975)/N\right]$.
+NEES is the most direct check of whether $\Pm$ honestly describes the actual error.
+
+\subsection{Per-state error envelopes}
+Plot $e_{k,j}$ against $\pm 3\sqrt{[\Pm_k^+]_{jj}}$ for every state $j$. The scalar NEES
+can hide a single inconsistent state, and these plots show which state is the problem.
+It is also useful to compute NEES separately for meaningful subsystem blocks of the state.
+
+\subsection{RMSE versus predicted standard deviation}
+\begin{equation}
+  \mathrm{RMSE}_{k,j} = \sqrt{\frac{1}{N}\sum_{i=1}^{N}\big(e_{k,j}^{(i)}\big)^2}
+  \quad\text{vs.}\quad
+  \overline{\sigma}_{k,j} = \sqrt{\frac{1}{N}\sum_{i=1}^{N}[\Pm_k^{+(i)}]_{jj}}.
+\end{equation}
+An RMSE persistently above $\overline{\sigma}$ means the filter is overconfident
+(``smug'').
+
+\subsection{Ensemble bias}
+The ensemble mean error $\bar{\e}_k = N^{-1}\sum_i \e_k^{(i)}$ should be statistically
+indistinguishable from zero. Test it against $\Pm_k^+/N$.
+
+\subsection{Filter--smoother comparison}
+Run a Rauch--Tung--Striebel (RTS) smoother and examine $\xhat_{k|K} - \xhat_{k|k}$.
+Large or structured differences reveal intervals where the forward filter struggles,
+for example during observability gaps.
+
+%======================================================================
+\section{Covariance Health and Numerics}
+\label{sec:numerics}
+\begin{itemize}
+  \item \textbf{Symmetry:} monitor $\|\Pm - \Pm\T\|_F / \|\Pm\|_F$.
+  \item \textbf{Positive definiteness:} monitor $\lambda_{\min}(\Pm)$ and any
+        Cholesky failures.
+  \item \textbf{Conditioning:} monitor $\kappa(\Pm) = \lambda_{\max}/\lambda_{\min}$.
+        Growth warns of numerical trouble or of nearly unobservable directions.
+  \item \textbf{Collapse and divergence:} track $\operatorname{tr}\Pm_k$ and
+        $\log\det\Pm_k$ over time. A collapsing $\Pm$ drives the gains toward zero, so the
+        filter stops listening to measurements.
+  \item \textbf{Correlation coefficients:}
+        $r_{ij} = P_{ij}/\sqrt{P_{ii}P_{jj}} \in [-1,1]$. Values pinned near $\pm1$
+        indicate states that cannot be separated.
+  \item \textbf{Update-form robustness:} compare the standard update with the Joseph form,
+        \begin{equation}
+          \Pm^+ = (\Id - \Km\Hm)\Pm^-(\Id - \Km\Hm)\T + \Km\Rm\Km\T,
+        \end{equation}
+        and with square-root or $UDU\T$ factorized implementations. If the results
+        differ, the problem is numerical rather than a modeling issue.
+\end{itemize}
+
+%======================================================================
+\section{Linearization Validity}
+\label{sec:linearization}
+Linearization error is the failure mode specific to the EKF.
+
+\subsection{Jacobian verification}
+Check the analytic $\Fm$ and $\Hm$ against complex-step derivatives, which have no
+subtractive cancellation error:
+\begin{equation}
+  \frac{\partial f}{\partial x_j} \approx
+  \frac{\operatorname{Im}\, f(\x + i h\,\bm{\hat{e}}_j)}{h},
+  \qquad h \sim 10^{-20},
+\end{equation}
+or against central finite differences when $f$ is not complex-analytic.
+
+\subsection{Nonlinearity index}
+Following Junkins and Singla, sample points $\x_s$ on the $1\sigma$--$3\sigma$ covariance
+ellipsoid about $\bar{\x}$ and compute
+\begin{equation}
+  \nu(t) = \max_s
+  \frac{\|\Phim(t;\x_s) - \Phim(t;\bar{\x})\|}{\|\Phim(t;\bar{\x})\|}.
+\end{equation}
+A large $\nu$ over a propagation interval means the linear covariance propagation cannot be
+trusted over that interval. An analogous index applies to $\Hm$.
+
+\subsection{Covariance propagation cross-check}
+Propagate the same Gaussian prior through Monte Carlo sampling or the unscented
+transform, and compare the result with the EKF prediction
+$(\bar{\x}_{\mathrm{EKF}},\Pm_{\mathrm{EKF}})$. A scalar summary is the KL divergence
+between the two Gaussians:
+\begin{equation}
+  D_{\mathrm{KL}} = \tfrac12\!\left[
+  \operatorname{tr}\!\big(\Pm_{\mathrm{EKF}}^{-1}\Pm_{\mathrm{ref}}\big)
+  + \Delta\bar{\x}\T\Pm_{\mathrm{EKF}}^{-1}\Delta\bar{\x}
+  - n + \ln\frac{\det\Pm_{\mathrm{EKF}}}{\det\Pm_{\mathrm{ref}}}\right].
+\end{equation}
+
+\subsection{Second-order term magnitude}
+Estimate the second-order mean correction
+$\tfrac12\sum_j \bm{\hat{e}}_j \operatorname{tr}(\nabla^2 f_j\,\Pm)$ and compare it with
+$\sqrt{\operatorname{diag}\Pm}$. If the correction is comparable in size, a second-order
+filter may be warranted.
+
+\subsection{Alternative-filter comparison}
+Run an iterated EKF or an unscented Kalman filter on the same data. Meaningful divergence
+between their estimates indicates that linearization error is material for the problem.
+
+%======================================================================
+\section{Observability and Information}
+\label{sec:observability}
+
+\subsection{Local observability}
+Use the observability matrix
+$\mathcal{O}_k = [\Hm_k\T,\ (\Hm_{k+1}\Fm_k)\T,\ \dots]\T$, or the information Gramian
+\begin{equation}
+  \bm{W}_k = \sum_{j=k}^{k+L}\Phim_{j,k}\T \Hm_j\T \Rm_j^{-1}\Hm_j \Phim_{j,k}.
+\end{equation}
+Track its rank, its smallest singular value, and its condition number along the trajectory.
+The smallest singular value serves as a degree of observability.
+
+\subsection{Per-measurement information}
+Measure each update's contribution through the eigenvalues of $\Pm^-$ versus $\Pm^+$, or
+through $\Delta(\Pm^{-1}) = \Hm\T\Rm^{-1}\Hm$, or through the entropy reduction
+$\tfrac12\ln(\det\Pm^-/\det\Pm^+)$. Measurements that contribute almost nothing deserve
+investigation.
+
+\subsection{Posterior Cram\'er--Rao lower bound (PCRLB)}
+For additive Gaussian noise, the Tichavsk\'y et al.\ recursion for the information
+matrix is
+\begin{equation}
+  \Jm_{k+1} = \Qm_k^{-1} + \E\!\left[\Hm_{k+1}\T\Rm_{k+1}^{-1}\Hm_{k+1}\right]
+  - \Qm_k^{-1}\E[\Fm_k]\left(\Jm_k + \E\!\left[\Fm_k\T\Qm_k^{-1}\Fm_k\right]\right)^{-1}
+  \E[\Fm_k]\T\Qm_k^{-1},
+\end{equation}
+with expectations evaluated along the true trajectories. Compare $\Jm_k^{-1}$ with both
+$\Pm_k$ and the Monte Carlo mean-squared error. This separates filter inefficiency from
+the inherent difficulty of the problem.
+
+%======================================================================
+\section{Tuning and Adaptive Diagnostics}
+\label{sec:tuning}
+\begin{itemize}
+  \item \textbf{Covariance matching:} over a window of $W$ steps, compute
+        $\hat{\bm{C}}_\nu = W^{-1}\sum \nuv_k\nuv_k\T$ and compare it with $\Sm_k$.
+        This suggests the estimate $\hat{\Rm} = \hat{\bm{C}}_\nu - \Hm\Pm^-\Hm\T$.
+  \item \textbf{Mehra's method and autocovariance least squares (ALS):} these estimate
+        $\Qm$ and $\Rm$ from the innovation autocorrelations of a suboptimal filter,
+        which gives a data-driven tuning check.
+  \item \textbf{Gain history:} plot $\|\Km_k\|$ over time. Gains decaying toward zero
+        while errors persist are the classic sign that $\Qm$ is too small.
+  \item \textbf{Consider and sensitivity analysis:} propagate the sensitivity
+        $\partial\xhat/\partial\bm{c}$ to unestimated parameters $\bm{c}$ (for example
+        sensor biases or dynamics coefficients) and form the consider covariance.
+        This tests whether such parameters explain an observed inconsistency.
+  \item \textbf{Error budget:} enable each error source individually in Monte Carlo runs
+        to obtain per-source contributions to the total error.
+\end{itemize}
+
+%======================================================================
+\section{Fault and Outlier Detection}
+\label{sec:fault}
+\begin{itemize}
+  \item \textbf{Chi-square gating:} reject $\bm{z}_k$ if
+        $\epsilon_{\nu,k} > \chisq{m}(1-\alpha)$. Track the rejection rate over time;
+        a rising rate signals model mismatch rather than random outliers.
+  \item \textbf{CUSUM on NIS:} the statistic
+        \begin{equation}
+          g_k = \max\!\big(0,\; g_{k-1} + \epsilon_{\nu,k} - m - \delta\big)
+        \end{equation}
+        raises an alarm when $g_k > h$. It detects slow drifts that per-step tests miss.
+        The sequential probability ratio test (SPRT) is a related alternative.
+  \item \textbf{Generalized likelihood ratio (GLR):} hypothesizes a fault signature and
+        estimates its onset time and magnitude. It is suited to step faults and jumps.
+\end{itemize}
+
+%======================================================================
+\section{Stability Theory}
+\label{sec:stability}
+Reif et al.\ give sufficient conditions for the EKF estimation error to be exponentially
+bounded in mean square. The conditions require uniform bounds on $\Fm_k$, $\Hm_k$, and
+$\Pm_k$, uniform observability, and sufficiently small initial error and noise. They are
+more useful for proving boundedness than for online monitoring.
+
+%======================================================================
+\section{Attitude-Specific Considerations}
+\label{sec:attitude}
+\begin{itemize}
+  \item \textbf{Additive quaternion EKF:} monitor $\big|\|\bm{q}\| - 1\big|$, and note
+        that the $4\times4$ covariance is singular along the norm direction.
+  \item \textbf{Multiplicative EKF (MEKF):} verify the covariance reset after each update,
+        and confirm that the attitude error stays small enough for the small-angle
+        error parameterization to hold.
+  \item \textbf{Coupled orbit--attitude filters:} compute NEES separately for the orbit
+        block, the attitude block, and the cross-covariance. A whole-state NEES can look
+        acceptable while one subsystem is badly inconsistent.
+\end{itemize}
+
+%======================================================================
+\section{Summary}
+\begin{center}
+\small
+\begin{tabularx}{\textwidth}{@{}lcX@{}}
+\toprule
+\textbf{Technique} & \textbf{Truth?} & \textbf{Primarily detects} \\
+\midrule
+NIS (single step, time-averaged) & No  & Over- or under-confidence; mis-tuned $\Qm$, $\Rm$ \\
+Innovation whiteness, Ljung--Box & No  & Suboptimal gain, correlated noise, model error \\
+Innovation zero-mean             & No  & Biases, misalignment, timing offsets \\
+NEES and ANEES                   & Yes & Honesty of $\Pm$ \\
+Per-state error envelopes        & Yes & Which states are inconsistent \\
+RMSE vs.\ $\overline{\sigma}$    & Yes & Filter smugness \\
+Filter--smoother difference      & No  & Struggling intervals, observability gaps \\
+Covariance symmetry, PD, $\kappa$& No  & Numerical breakdown \\
+$\operatorname{tr}\Pm$, $\log\det\Pm$ & No & Collapse or divergence \\
+Jacobian check (complex step)    & No  & Implementation bugs \\
+Nonlinearity index, UT/MC check  & No  & Linearization breakdown \\
+IEKF or UKF comparison           & No  & Material linearization error \\
+Observability Gramian            & No  & Weakly observable directions \\
+PCRLB                            & Yes & Filter inefficiency vs.\ problem limits \\
+Covariance matching, ALS         & No  & Noise covariance estimation \\
+Gain history                     & No  & $\Qm$ too small \\
+Consider analysis, error budget  & Mixed & Unmodeled parameters, error sources \\
+Gating rate, CUSUM, GLR          & No  & Outliers, drifts, faults \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+%%%%%%%%%%%%% Bibliography %%%%%%%%%%%%%
+\nocite{*}
+\printbibliography
+
+\end{document}

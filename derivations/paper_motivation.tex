@@ -1,0 +1,164 @@
+\documentclass[11pt]{article}
+
+%%%%%%%%%%%%% Package imports %%%%%%%%%%%%%
+% Uses Latin Modern + T1 when available; falls back to default fonts otherwise.
+\IfFileExists{lmodern.sty}%
+  {\usepackage[T1]{fontenc}\usepackage{lmodern}\usepackage{microtype}}%
+  {\usepackage[T1]{fontenc}\usepackage[expansion=false]{microtype}}
+\usepackage[backend=biber, style=numeric, sorting=none]{biblatex}
+\usepackage{enumitem}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{textcomp}
+\usepackage{url}
+\usepackage{xcolor}
+\usepackage[colorlinks=true,linkcolor=blue!50!black,citecolor=green!35!black,urlcolor=blue!60!black]{hyperref}
+
+\addbibresource{paper_motivation.bib}
+
+%%%%%%%%%%%%% Macro definitions %%%%%%%%%%%%%
+\newcommand{\dv}{\ensuremath{\Delta v}}
+
+%%%%%%%%%%%%% Title card content %%%%%%%%%%%%%
+\title{Motivation: Relative-State Estimation for Payload Catch by a Cislunar Momentum Exchange Tether}
+\author{Andrew Binder}
+\date{October 25, 2026}
+
+%%%%%%%%%%%%% Begin document %%%%%%%%%%%%%
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This note is the long-form motivation for the paper's introduction.
+It follows the structure recommended in the October 22, 2026 slide review with D.~Arnas.
+The argument has four steps.
+Cislunar space faces two challenges: giving many missions access, and tracking a growing population of objects over a vast volume.
+A network of momentum exchange tethers is one potential solution to both, and its infrastructure can also host services for ordinary missions.
+The price of that solution is that every catch requires precise knowledge of the payload's state relative to the catch mechanism, which existing tracking and positioning systems cannot yet provide in cislunar space.
+The paper therefore asks which sensors a filter needs to supply that knowledge, and which constraints and limitations bound its feasibility.
+\end{abstract}
+
+%=====================================================================
+\section{Two challenges ahead in cislunar space}\label{sec:challenges}
+
+\subsection{Providing access}
+
+Activity between the Earth and the Moon is growing quickly.
+More than 30 missions are slated to launch to the Moon between 2024 and 2030 \parencite{GaTech2025Cislunar}.
+A recent review of cislunar expansion likewise counts over 30 cislunar missions in the coming decade, many of which carry several payloads bound for the lunar surface and lunar orbit \parencite{BakerMcEvilly2024}.
+The first challenge this growth poses is one of access: each of these missions must reach its destination orbit, and today each one carries the propellant for every leg of its own transfer.
+% TODO: confirm Ishimatsu et al. (2016) supports this sentence.
+Systems studies of Earth--Moon--Mars logistics already treat transportation in this region as a network problem, in which shared infrastructure changes what an individual mission must bring with it \parencite{Ishimatsu2016}.
+As the number of missions grows, the question shifts from how a single spacecraft reaches the Moon to how the region as a whole is supplied.
+
+\subsection{Tracking more objects over far more space}
+
+The second challenge follows from the first.
+A growing cislunar economy means more objects to track, and those objects are spread over a region far larger than any that space surveillance has had to cover before.
+Cislunar objects operate at least ten times farther away than geosynchronous orbit, a potential coverage volume more than 1{,}000 times larger \parencite{AFRLOracle}.
+Most satellite tracking sensors, by contrast, are designed to detect and track objects at geosynchronous distances or closer, and observations from the Earth are further limited by lunar and solar exclusion zones \parencite{AFRLOracle}.
+The dynamics compound the geometry.
+Methods developed for near-Earth space situational awareness rest on two-body motion, and they lose accuracy in a region governed by multi-body dynamics \parencite{BakerMcEvilly2024}.
+
+Traffic will not spread evenly through this volume.
+Missions favor a small set of popular lunar orbits, and collision opportunities will increase in those orbits as missions accumulate; spacecraft there may need to perform several costly collision-avoidance maneuvers each year \parencite{GaTech2025Cislunar}.
+% TODO: confirm this claim in Lechtenberg et al. (2024).
+Assessing those conjunctions is itself difficult, because screening depends on each operator's own ephemeris and covariance, which are often unavailable \parencite{Lechtenberg2024}.
+Access and tracking are therefore linked: the more successfully the region is opened to missions, the harder it becomes to know where those missions are.
+
+%=====================================================================
+\section{A momentum exchange tether network as a potential solution}\label{sec:tethers}
+
+This paper studies one potential answer to both challenges: a network of rotating momentum exchange tethers.
+The tether network is not claimed to be the only solution.
+It is, however, a concept that has proven useful in other transportation systems, translated here to space, and it addresses access, traffic structure and services together.
+
+\subsection{Access through momentum exchange}
+
+A rotating momentum exchange tether catches a payload at one end and releases it onto a new trajectory, transferring momentum to the payload instead of expending propellant \parencite{HoytUphoff2000,CartmellMcKenzie2008}.
+The \dv{} it provides is cheap, but it is not free.
+Every boost removes orbital energy and momentum from the tether, and that loss must be recovered before the next exchange.
+Two recovery strategies appear in the literature.
+In Hoyt's architecture for moving payloads between low Earth orbit and the lunar surface, the system returns an equal mass of lunar material to low Earth orbit, conserving momentum and energy and, in the author's words, ``allowing frequent traffic between LEO and the lunar surface with minimal propellant requirements'' \parencite{Hoyt1998ISSLunar}.
+The Momentum-eXchange Electrodynamic Re-boost (MXER) concept instead restores the tether's orbit with the ``propellant-free thrust possible with electrodynamic space tethers'' \parencite{CanfieldSorensen2006}.
+In either case, the cost of access moves away from propellant carried by each individual mission and into infrastructure and the balance of traffic through it.
+
+\subsection{Structure for traffic management}
+
+A tether network also changes the shape of the traffic it carries.
+Payloads travel repeated routes between fixed tether facilities \parencite{Hoyt1999NIAC}, rather than each mission following its own bespoke trajectory.
+Cislunar dynamics support such routes; for example, the 2:1 resonant spatial orbit family provides reliable and repeatable transit between the Earth and the Moon \parencite{BinderArnas2024}.
+The volume that missions actually occupy, and that must be watched, then narrows from the whole region to the neighborhoods of a few known corridors and facilities.
+
+Air transportation offers a direct precedent.
+The first U.S.\ air traffic control centers were established to ensure ``the safe separation of aircraft traveling along designated routes between cities'' \parencite{PrestonFAA}.
+In principle an aircraft can fly wherever it likes; restricting the paths that aircraft follow is what made the traffic manageable, and it also allowed more efficient infrastructure to be built along those paths.
+Current airspace research shows that this trade-off still holds.
+A simulation study of European airspace found that in smaller or busier sectors, free routing increases controller workload ``due to less predictable flight paths,'' while in large sectors it improves efficiency and sustainability \parencite{Toanchina2024}.
+Even Europe's free-route airspace, which is credited with reducing workload, depended on modern air traffic management systems to work \parencite{IAR2018FRA}.
+Cislunar traffic will concentrate in a handful of popular orbits \parencite{GaTech2025Cislunar}, which is exactly the dense regime in which route structure pays for itself.
+
+The analogy is also a systems-engineering one.
+Air transportation has long been studied as a system-of-systems design problem rather than as the design of individual aircraft \parencite{DeLaurentis2005}, with network-level structure and the way capacity is added determining whether the system saturates \parencite{DeLaurentisHan2006}.
+A tether network carries this view into cislunar space: the unit of design becomes the transportation network, not the single spacecraft.
+
+\subsection{Infrastructure that hosts services}
+
+Fixed infrastructure on known, repeating orbits can also support ordinary missions that never need a catch.
+Such missions can be provided with communications, navigation and other services.
+This direction is already planned for the Moon: NASA, ESA and JAXA are developing LunaNet as ``a cooperative network supporting missions in transit to, around, and on the Moon,'' providing communications and position, navigation and timing (PNT) services from multiple government and commercial providers \parencite{LunaNetV5}.
+A tether facility could act as one such provider node, so that the infrastructure built for access and traffic structure also serves the wider cislunar community.
+(This last point is a proposal of the present work rather than a finding of the cited sources.)
+
+%=====================================================================
+\section{The price: every catch needs precise relative-state knowledge}\label{sec:catch}
+
+The benefits above all depend on catches succeeding, and a catch is a demanding rendezvous.
+A capture mechanism designed for MXER must close in five seconds or less, and it must accommodate an error region in position and velocity that is elongated along the tether at the moment of capture \parencite{CanfieldSorensen2006}.
+Prior capture analyses put the required knowledge of the payload's state relative to the catch mechanism at the level of meters in position and meters per second in velocity \parencite{Williams2005,Sorensen2001}.
+
+The state being estimated is not that of a single spacecraft.
+The tether is a coupled orbit--attitude system: its spin sets the catch geometry, while its orbit shifts with every momentum exchange \parencite{Baoyin}.
+Near the Earth--Moon Lagrange points, multi-body gravity gradients produce torques that vary along the orbit \parencite{GuzzettiHowell2018,Misra2002}.
+A catch therefore requires simultaneous, consistent knowledge of the payload trajectory, the tether's center-of-mass trajectory and the tether's orientation and spin.
+
+Knowledge at this level is already hard to obtain near the Earth.
+Space surveillance networks track about 40{,}000 objects, while the population of debris larger than 1~cm is estimated at more than 1.2 million objects, and the number of events triggering collision-avoidance procedures rises each year \parencite{ESASER2025}.
+The problem escalates at cislunar distances.
+Sensors are much farther from their targets and constrained by exclusion zones \parencite{AFRLOracle}; the Deep Space Network can reach the region but tracks far fewer objects than near-Earth networks \parencite{BakerMcEvilly2024}; and Earth-based positioning offers limited precision for cislunar spacecraft \parencite{AFRLOracle}.
+
+A GNSS-like service at the Moon would ease this problem, but none is yet available.
+ESA's Moonlight programme, with four navigation satellites and one communications satellite, targets initial operations by the end of 2028 and full operations by 2030 \parencite{ESAMoonlight2024}.
+NASA's Lunar Communications Relay and Navigation Systems (LCRNS) project plans to deploy its services incrementally, beginning with Artemis~III, toward a ``GPS-like capability at the Moon'' \parencite{Espera2025LCRNS}, and the first relay satellite from its commercial provider has slipped to early 2027 \parencite{AvWeek2026IM}.
+A tether system deployed in the coming years therefore cannot rely on ground sensors or a lunar PNT constellation alone.
+
+%=====================================================================
+\section{The gap: which sensors, and what limits feasibility}\label{sec:gap}
+
+The catch-relevant state must instead be estimated by a filter, run onboard or on the ground, from imperfect and imprecise measurements.
+Those measurements can come from sensors hosted on the payload, on either tether terminal, or from whatever limited external sources exist.
+State estimation with minimal sensor configurations has been studied for tethered satellite formations \parencite{Zhang2020,Fang2022}.
+It has not been studied for a rotating cislunar momentum exchange tether that must catch a free-flying payload.
+
+This paper addresses that gap with two questions.
+
+\begin{enumerate}[label=\textbf{Q\arabic*.},leftmargin=3em,itemsep=4pt]
+  \item \textbf{What is needed.}
+        Which combinations of payload, tether and external sensors drive the covariance of the payload's position and velocity relative to the catch mechanism below catch tolerance at the time of the catch?
+  \item \textbf{What limits it.}
+        Which sensor packages cause the extended Kalman filter to diverge, which single sensor's loss degrades the estimate most, and does a catch remain feasible when lunar PNT measurements are unavailable?
+\end{enumerate}
+
+The second question is at least as important as the first.
+The constraints and limitations it identifies set the boundary of what a cislunar tether system can achieve, independent of how capable any particular sensor suite might be.
+
+Both questions are answered by the same study.
+The two tether terminals and the payload are modeled as point masses in the Earth--Moon circular restricted three-body problem, with the tether's center of mass on an $L_1$ halo orbit and its length constrained to vary at a constant rate.
+All three bodies are propagated together, so that the cross-covariances between payload and tether states, which govern the relative-state distribution at the catch, are retained.
+An extended Kalman filter then processes measurements from every feasible package drawn from a list of candidate sensor models, so that the effect of each sensor, and of every interaction between sensors, is computed exactly rather than estimated from a sample.
+
+%%%%%%%%%%%%% Bibliography %%%%%%%%%%%%%
+\printbibliography
+
+\end{document}
