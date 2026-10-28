@@ -104,7 +104,7 @@ halo_xyz = deval(halo_sol, linspace(0, halo_PD, 600)) * L_star;
 halo_xyz = halo_xyz(1:3, :);
 
 %% Figures
-figs = [plotLengthHistory(cases), ...
+figs = [plotLengthHistory(cases, ode_opts), ...
         plotTetherGeometry(cases, eta, prop_days), ...
         plotHaloContext(cases, halo_xyz, mu, L_star), ...
         plotEndpointMotion(cases(rates_ms == 0), 1)];
@@ -152,7 +152,7 @@ function sv_dot = tetherDynamics(sv, eta, length_dot, accel_fn)
 end
 
 %% Local functions: plotting
-function fig = plotLengthHistory(cases)
+function fig = plotLengthHistory(cases, ode_opts)
     % Tether length versus time, and how well the constraint is satisfied.
     fig = figure('Units', 'inches', 'Position', [1, 1, 6.5, 5.2], 'Color', 'w');
     tl = tiledlayout(fig, 2, 1, 'TileSpacing', 'compact', 'Padding', 'compact');
@@ -176,7 +176,8 @@ function fig = plotLengthHistory(cases)
     title(ax1, 'Tether Length Follows the Prescribed Schedule', ...
           'Interpreter', 'latex');
     legend(ax1, handles, [cases.label, "Prescribed $L_0 + \dot{L}\,t$"], ...
-           'Interpreter', 'latex', 'Location', 'northwest', 'Box', 'off');
+           'Interpreter', 'latex', 'Location', 'southwest', 'Box', 'off', ...
+           'FontSize', 7);
     ax1.XTickLabel = [];
 
     ax2 = nexttile(tl);
@@ -193,6 +194,26 @@ function fig = plotLengthHistory(cases)
     title(ax2, ['Constraint Residual ', ...
                 '$\left| \, \|\mathbf{d}\|^2 - (L_0 + \dot{L}t)^2 \right|$'], ...
           'Interpreter', 'latex');
+
+    tol_str = sprintf(['\\textbf{Numerical tolerances}\n', ...
+                       'Absolute: $%s$\nRelative: $%s$'], ...
+                      latexSci(ode_opts.AbsTol), latexSci(ode_opts.RelTol));
+    text(ax2, 0.98, 0.06, tol_str, 'Units', 'normalized', ...
+         'Interpreter', 'latex', 'FontSize', 9, ...
+         'HorizontalAlignment', 'right', 'VerticalAlignment', 'bottom', ...
+         'BackgroundColor', [0.97, 0.97, 0.97], 'EdgeColor', [0.6, 0.6, 0.6], ...
+         'LineWidth', 0.75, 'Margin', 5);
+end
+
+function s = latexSci(v)
+    % Format a scalar as a LaTeX power of ten, e.g. 1e-10 -> 1\times10^{-10}
+    e = floor(log10(v));
+    m = v / 10^e;
+    if abs(m - 1) < 1e-9
+        s = sprintf('10^{%d}', e);
+    else
+        s = sprintf('%.3g\\times10^{%d}', m, e);
+    end
 end
 
 function fig = plotTetherGeometry(cases, eta, prop_days)
@@ -357,26 +378,26 @@ function fig = plotEndpointMotion(tether, span_days)
     xlabel(ax1, '$x$ [$10^3$ km]', 'Interpreter', 'latex');
     ylabel(ax1, '$y$ [$10^3$ km]', 'Interpreter', 'latex');
     title(ax1, sprintf('Full %g-Day Arc', span_days), 'Interpreter', 'latex');
-    legend(ax1, [h_cw, h_cm, h_0, h_f, h_box], ...
+    legend(ax1, [h_cw, h_cm, h_0, h_f], ...
            {'CW', 'CM', '$t = 0$', sprintf('$t = %g$ d', span_days)}, ...
            'Interpreter', 'latex', 'Location', 'northwest', 'Box', 'off');
 
-    % Zoomed view with tether snapshots colored by time
+    % Zoomed view with endpoint positions sampled and colored by time
     ax2 = nexttile(tl);
     hold(ax2, 'on');
     idx_zoom = find(in_zoom);
     origin = cw(1:2, 1);  % Offsets keep the tick labels short
     cw_z = cw(1:2, :) - origin;
     cm_z = cm(1:2, :) - origin;
-    for idx = idx_zoom(round(linspace(1, numel(idx_zoom), n_snapshots)))
-        color = cmap(max(1, ceil(t(idx) / (zoom_hours / 24) * 256)), :);
-        plot(ax2, [cw_z(1, idx), cm_z(1, idx)], [cw_z(2, idx), cm_z(2, idx)], ...
-             '-', 'Color', [color, 0.8], 'LineWidth', 1.5);
-    end
+    idx_samples = idx_zoom(round(linspace(1, numel(idx_zoom), n_snapshots)));
     plot(ax2, cw_z(1, in_zoom), cw_z(2, in_zoom), '-', ...
          'Color', [0.835, 0.369, 0.000], 'LineWidth', 1.6);
     plot(ax2, cm_z(1, in_zoom), cm_z(2, in_zoom), '-', ...
          'Color', [0.000, 0.447, 0.698], 'LineWidth', 1.6);
+    scatter(ax2, cw_z(1, idx_samples), cw_z(2, idx_samples), 28, ...
+            t(idx_samples) * 24, 'o', 'filled');
+    scatter(ax2, cm_z(1, idx_samples), cm_z(2, idx_samples), 28, ...
+            t(idx_samples) * 24, 's', 'filled');
     plot(ax2, 0, 0, 'o', 'MarkerSize', 5, ...
          'MarkerFaceColor', 'k', 'MarkerEdgeColor', 'k');
     axis(ax2, 'equal');
