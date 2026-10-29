@@ -25,6 +25,52 @@ buildtool clean    % remove results/
 
 Test results and coverage are written to `results/`.
 
+## Measurement models
+
+The `coa.meas` package models measurements for the 18-element Cartesian state
+`[r1; r2; r3; v1; v2; v3]`, in the same frame and nondimensional units used
+by the dynamics. `coa.meas.measurementModels(state, mask)` returns the selected
+predicted measurements; optional second and third outputs are
+the state Jacobian and measurement-noise covariance, respectively. The
+Jacobian is evaluated only when requested. Noise covariances are needed and
+validated only when the third output is requested.
+
+Each bit in the integer `mask` selects one group (group 1 is bit 0):
+
+| Group | Mask bit | Measurement rows |
+|---|---:|---|
+| 1 | `2^0` | Ground angles for bodies 1-3 (6) |
+| 2 | `2^1` | Relative camera and star-tracker angles (4) |
+| 3 | `2^2` | Tether angular size (1) |
+| 4 | `2^3` | DSN ranges for bodies 1-3 (3) |
+| 5 | `2^4` | DSN range rates for bodies 1-3 (3) |
+| 6 | `2^5` | Crosslink ranges, `r2-r3` then `r2-r1` (2) |
+| 7 | `2^6` | Crosslink range rates, `r2-r3` then `r2-r1` (2) |
+| 8 | `2^7` | Lunar PN&T/GNSS position for bodies 1-3 (9) |
+
+Selected groups are stacked in ascending group order; rows within each group
+follow the order above and the corresponding function documentation. A zero
+mask returns no measurement rows. The mask must be a nonnegative integer.
+The third output is block diagonal across
+selected rows/groups; covariance fields are required only for selected groups
+and must be finite, real, symmetric, positive definite matrices of the
+documented size.
+
+`coa.meas.measurementCovariances(length_scale, speed_scale)` supplies nominal
+measurement-noise covariances using characteristic scales in km and km/s.
+Both scales must be finite and positive. These covariances describe sample
+noise, not sensor bias or drift. Candidate
+accelerometers in sensor-table rows 20-22 of `derivations/ekf_equations.tex`
+are not implemented in the current measurement model.
+
+Run `examples/tetherFilterDemo.m` in MATLAB for an example that propagates the
+tethered three-body estimate and covariance for 24 hours, applying 72 noisy
+measurement updates at 20-minute intervals with Joseph-form EKF updates. The
+demo selects all eight implemented measurement groups. It creates one figure
+per body, arranged as a 3-by-2 grid with x, y, and z component rows and
+position and velocity columns. Each subplot shows the signed error with a
+shaded componentwise +/-3-sigma bound.
+
 ## Developer setup (Windows)
 
 Quick steps to get the repository ready for development and automated checks.
@@ -62,8 +108,8 @@ pwsh -Command "matlab -batch \"buildtool('test')\""
 
 5. See repository developer docs and checklist:
 
-- `docs/HOOKS.md` — hook behavior and installer notes (Windows specifics)
-- `docs/COMMIT_CHECKLIST.md` — concise commit/push checklist (Windows-focused)
+- `docs/HOOKS.md` ??? hook behavior and installer notes (Windows specifics)
+- `docs/COMMIT_CHECKLIST.md` ??? concise commit/push checklist (Windows-focused)
 
 CI strategy (local-only)
 
