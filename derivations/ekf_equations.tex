@@ -286,7 +286,11 @@ $\Gm_\perp$ along the nominal trajectory.
 
 \section{Sensors}\label{sec:sensors}
 
-Table~\ref{tab:sensor_list} lists the candidate sensors; the subsections below carry the details for each.
+Table~\ref{tab:sensor_list} lists candidate sensors; the model listing below
+defines their idealized measurement equations. The current implementation in
+\texttt{coa.meas.measurementModels} covers sensors 1--19 in eight selectable
+groups. Sensors 20--22 are accelerometer candidates only and are not currently
+implemented.
 
 {\footnotesize
 \setlength{\tabcolsep}{3pt}
@@ -335,48 +339,105 @@ Table~\ref{tab:sensor_list} lists the candidate sensors; the subsections below c
 \midrule
 16 & Doppler from RF ranging crosslink, payload relative in-track speed, $\mathbf{r}_3 - \mathbf{r}_2$ & $\dot{r} = h_5(\mathbf{r}_3 - \mathbf{r}_2, \dot{\mathbf{r}}_3 - \dot{\mathbf{r}}_2)$ & & \\
 \midrule
-17 & Lunar PN\&T position, $\mathbf{r}_1$ & $\mathbf{r}_1$ & & \\
+17 & Lunar PN\&T/GNSS-like position fix, $\mathbf{r}_1$ & $\mathbf{r}_1$ & & \\
 \midrule
-18 & Lunar PN\&T position, $\mathbf{r}_2$ & $\mathbf{r}_2$ & & \\
+18 & Lunar PN\&T/GNSS-like position fix, $\mathbf{r}_2$ & $\mathbf{r}_2$ & & \\
 \midrule
-19 & Lunar PN\&T position, $\mathbf{r}_3$ & $\mathbf{r}_3$ & & \\
+19 & Lunar PN\&T/GNSS-like position fix, $\mathbf{r}_3$ & $\mathbf{r}_3$ & & \\
 \midrule
-20 & Accelerometer on $m_1$ & Noise plus bias & & \\
+20 & Candidate accelerometer on $m_1$ (not implemented) & Noise plus bias & & \\
 \midrule
-21 & Accelerometer on $m_2$ & Noise plus bias & & \\
+21 & Candidate accelerometer on $m_2$ (not implemented) & Noise plus bias & & \\
 \midrule
-22 & Accelerometer on $m_3$ & Noise plus bias & & \\
+22 & Candidate accelerometer on $m_3$ (not implemented) & Noise plus bias & & \\
 \end{longtable}
 }
 
 \subsection{Model listing}
 
-Angles measurement, input position vector $\alpha = h_1(\boldsymbol{\rho}_1)$, $\delta = h_2(\boldsymbol{\rho}_1)$
+Angles measurement, input position vector $\boldsymbol{\rho}$:
 
+\begin{align}
+  \alpha &= h_1(\boldsymbol{\rho})
+          = \operatorname{atan2}(\rho_y,\rho_x), \\
+  \delta &= h_2(\boldsymbol{\rho})
+          = \operatorname{atan2}\!\left(\rho_z,
+              \sqrt{\rho_x^2+\rho_y^2}\right).
+  \label{eq:measurement-angles}
+\end{align}
+The declination expression is equivalent to
+$\arcsin(\rho_z/\|\boldsymbol{\rho}\|)$. Right ascension is quadrant-aware;
+the value and its Jacobian are undefined on the $z$ axis
+($\rho_x=\rho_y=0$).
+
+The Jacobian returned by \texttt{coa.meas.angles} is
 \begin{equation}
-  \alpha = \arctan\left[\frac{\boldsymbol{\rho}_1 \cdot \hat{\mathbf{y}}}{\boldsymbol{\rho}_1 \cdot \hat{\mathbf{x}}} \right]
+  \pd{[\alpha,\delta]^\top}{\boldsymbol{\rho}} =
+  \begin{bmatrix}
+    -\rho_y/q & \rho_x/q & 0 \\
+    -\rho_x\rho_z/(r^2\sqrt{q}) &
+    -\rho_y\rho_z/(r^2\sqrt{q}) & \sqrt{q}/r^2
+  \end{bmatrix},\quad
+  q=\rho_x^2+\rho_y^2,\quad r=\|\boldsymbol{\rho}\|.
 \end{equation}
 
-\begin{equation}
-  \delta = \arcsin\left[\frac{\boldsymbol{\rho}_1 \cdot \hat{\mathbf{z}}}{\|\boldsymbol{\rho}_1\|} \right]
-\end{equation}
-
-Angular size measurement, input position vectors $\boldsymbol{\rho}_1$ and $\boldsymbol{\rho}_2$, $\theta = h_3(\boldsymbol{\rho}_1, \boldsymbol{\rho}_2)$
+Angular size measurement, input position vectors $\boldsymbol{\rho}_1$ and
+$\boldsymbol{\rho}_2$:
 
 \begin{equation}
-  \theta = \arccos\left[\frac{\boldsymbol{\rho}_1 \cdot \boldsymbol{\rho}_2}{\|\boldsymbol{\rho}_1\| \|\boldsymbol{\rho}_2\|} \right]
+  \theta = h_3(\boldsymbol{\rho}_1,\boldsymbol{\rho}_2)
+  = \arccos(\mathbf{u}_1^\top\mathbf{u}_2),\qquad
+  \mathbf{u}_i=\frac{\boldsymbol{\rho}_i}{\|\boldsymbol{\rho}_i\|}.
+  \label{eq:measurement-angular-size}
 \end{equation}
+The cosine is clamped to $[-1,1]$ against floating-point roundoff. The
+measurement value is defined for parallel and antiparallel nonzero vectors,
+but the Jacobians are rejected when $\sin\theta<10^{-12}$. For other inputs,
+\begin{align}
+  \pd{\theta}{\boldsymbol{\rho}_1}
+    &= -\frac{(\mathbf{u}_2-c\mathbf{u}_1)^\top}
+             {\|\boldsymbol{\rho}_1\|\sin\theta}, \\
+  \pd{\theta}{\boldsymbol{\rho}_2}
+    &= -\frac{(\mathbf{u}_1-c\mathbf{u}_2)^\top}
+             {\|\boldsymbol{\rho}_2\|\sin\theta},\qquad
+  c=\mathbf{u}_1^\top\mathbf{u}_2.
+\end{align}
 
-Range measurement, input position vector $\boldsymbol{\rho}_1$, $r = h_4(\boldsymbol{\rho}_1)$
+Range measurement, input position vector $\boldsymbol{\rho}$:
 
 \begin{equation}
-  r = \norm{\boldsymbol{\rho}_1}
+  r = h_4(\boldsymbol{\rho}) = \|\boldsymbol{\rho}\|,\qquad
+  \pd{r}{\boldsymbol{\rho}} = \frac{\boldsymbol{\rho}^\top}{r}
+  \quad(r>0).
+  \label{eq:measurement-range}
 \end{equation}
+The range value is defined at $\boldsymbol{\rho}=0$, but the Jacobian is not.
 
-Range rate measurement, input position vectors $\boldsymbol{\rho}_1$ and velocity vectors $\dot{\boldsymbol{\rho}}_1$, $\dot{r} = h_5(\boldsymbol{\rho}_1, \dot{\boldsymbol{\rho}}_1)$
+Range rate measurement, input position and velocity vectors
+$\boldsymbol{\rho}$ and $\dot{\boldsymbol{\rho}}$:
 
+\begin{align}
+  \dot{r} &= h_5(\boldsymbol{\rho},\dot{\boldsymbol{\rho}})
+    = \frac{\boldsymbol{\rho}^\top\dot{\boldsymbol{\rho}}}{r},
+    \qquad r=\|\boldsymbol{\rho}\|, \\
+  \pd{\dot{r}}{\boldsymbol{\rho}}
+    &= \frac{(\dot{\boldsymbol{\rho}}-\dot{r}\mathbf{u})^\top}{r},
+  \qquad
+  \pd{\dot{r}}{\dot{\boldsymbol{\rho}}}=\mathbf{u}^\top,
+  \qquad \mathbf{u}=\frac{\boldsymbol{\rho}}{r}.
+  \label{eq:measurement-range-rate}
+\end{align}
+Both value and Jacobians are undefined at $r=0$.
+
+The lunar PN\&T position measurement is
 \begin{equation}
-  \dot{r} = \frac{\boldsymbol{\rho}_1 \cdot \dot{\boldsymbol{\rho}}_1}{\|\boldsymbol{\rho}_1\|}
+  \mathbf{z}_{\mathrm{PN\&T}}=h_6(\boldsymbol{\rho})
+  =\boldsymbol{\rho},\qquad
+  \pd{\mathbf{z}_{\mathrm{PN\&T}}}{\boldsymbol{\rho}}=\mathbf{I}_3.
+  \label{eq:measurement-pnt}
 \end{equation}
+It measures position only. The current model does not include an
+accelerometer/IMU measurement equation or bias state for candidate sensors
+20--22.
 
 \end{document}
