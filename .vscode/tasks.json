@@ -1,0 +1,26 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Test report (live)",
+      "type": "shell",
+      "command": "python test_results/test_report.py --watch --open",
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": { "panel": "dedicated", "reveal": "silent" }
+    },
+    {
+      "label": "Run tests",
+      "type": "shell",
+      "command": "matlab -batch \"buildtool test\"",
+      "problemMatcher": [],
+      "group": { "kind": "test", "isDefault": true }
+    },
+    {
+      "label": "Run tests and open report",
+      "dependsOn": ["Test report (live)", "Run tests"],
+      "dependsOrder": "parallel",
+      "problemMatcher": []
+    }
+  ]
+}

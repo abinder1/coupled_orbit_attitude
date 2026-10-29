@@ -20,10 +20,85 @@ Requires MATLAB R2024a or later. From the repository root:
 
 ```matlab
 buildtool          % add toolbox to path, run Code Analyzer, run all tests
-buildtool clean    % remove results/
+buildtool clean    % delete the XML test and coverage results
 ```
 
-Test results and coverage are written to `results/`.
+Test results and coverage are written to `test_results/`
+(`test-results.xml` and `coverage.xml`).
+
+## Test and coverage report
+
+An interactive HTML report lets you browse test results and line coverage
+instead of reading XML. It needs only Python 3 (standard library) on `PATH`; no
+packages to install. `--run` also needs `matlab` on `PATH`.
+
+### Quick start (recommended: live mode)
+
+1. From the repository root, start the report in live mode:
+
+   ```powershell
+   python test_results/test_report.py --watch --open
+   ```
+
+   This opens `test_results/report.html` in your default browser and keeps
+   running in the terminal. Leave it running (Ctrl+C stops it).
+
+2. In a second terminal (or MATLAB), run the tests:
+
+   ```powershell
+   matlab -batch "buildtool clean test"
+   ```
+
+3. Watch the browser. When the run finishes the page updates itself within
+   a few seconds; no refresh needed. The header shows when the results were
+   written, followed by "live: updates automatically".
+
+In VS Code you can do the same from Terminal > Run Task: **Run tests and open
+report** (starts live mode and runs the tests), or **Test report (live)** and
+**Run tests** separately. The tasks are defined in `.vscode/tasks.json`.
+
+Notes:
+
+- Plain `buildtool test` skips the run as "up to date" when nothing changed, so
+  no new results are written and the page correctly stays the same. Use
+  `buildtool clean test` to force a fresh run.
+- In live mode an update keeps your current tab and open source file; text typed
+  into the test filter box is cleared.
+
+### Other modes
+
+```powershell
+python test_results/test_report.py              # write report.html once
+python test_results/test_report.py --open       # ...and open it
+python test_results/test_report.py --run --open # run buildtool test, then open
+```
+
+Without `--watch`, the page is a snapshot of the results at the time you ran the
+script. Re-run the script and refresh the browser to see newer results. The
+script works from any working directory. Options: `--results DIR` (folder
+containing the XML files) and `--output FILE` (HTML path).
+
+### Reading the report
+
+- **Unit tests tab:** summary cards (tests, passed, failed/errors, skipped,
+  suites, total time); one expandable section per test suite; a text filter and
+  a status filter (all, passed, failed, skipped); failing suites open
+  automatically with their failure messages; a "Slowest tests" table.
+- **Code coverage tab:** overall line coverage and counts of covered and missed
+  lines; a per-file table with coverage bars (green at 90% or more, orange at
+  75% or more, red below), sortable by clicking a column header. Click a file to
+  see its source with per-line hit counts: green lines were executed, red lines
+  were never executed. Use "< All files" to go back.
+
+Coverage is line-based only; MATLAB's Cobertura output has no branch data, and
+only code under `toolbox/` is measured.
+
+### Files
+
+`test_results/test_report.py` is the only tracked file in `test_results/`.
+`report.html`, `report_data.js` and the XML results are regenerated and
+git-ignored. `buildtool clean` deletes only the two XML result files; the
+report files remain until the next run of the script overwrites them.
 
 ## Measurement models
 
@@ -94,6 +169,10 @@ The MATLAB pre-commit pipeline is defined in `.pre-commit-config.yaml` and uses:
 
 Project defaults for MISS_HIT are in `miss_hit.cfg`.
 
+The test/coverage report (`test_results/test_report.py`) needs Python 3 on
+`PATH` (already required above for `pre-commit`) and no additional packages.
+Its `--run` option also needs `matlab` on `PATH`.
+
 3. Run MATLAB build checks locally (same commands used by hook tasks):
 
 ```powershell
@@ -108,8 +187,8 @@ pwsh -Command "matlab -batch \"buildtool('test')\""
 
 5. See repository developer docs and checklist:
 
-- `docs/HOOKS.md` ??? hook behavior and installer notes (Windows specifics)
-- `docs/COMMIT_CHECKLIST.md` ??? concise commit/push checklist (Windows-focused)
+- `docs/HOOKS.md` — hook behavior and installer notes (Windows specifics)
+- `docs/COMMIT_CHECKLIST.md` — concise commit/push checklist (Windows-focused)
 
 CI strategy (local-only)
 

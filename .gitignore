@@ -1,5 +1,6 @@
 # Build and run outputs
-test_results/
+test_results/*
+!test_results/test_report.py
 runs/
 .buildtool/
 *.mltbx
