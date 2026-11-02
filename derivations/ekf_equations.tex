@@ -440,4 +440,103 @@ It measures position only. The current model does not include an
 accelerometer/IMU measurement equation or bias state for candidate sensors
 20--22.
 
+\section{Relative Payload--Catch-Mechanism State in the Tether Frame}
+\label{sec:relative-state}
+
+\paragraph{Quantity of interest.}
+The rendezvous depends on the payload state relative to the catch mechanism,
+\begin{equation}
+  \bm{d} = \begin{bmatrix} \mathbf{r}_3 - \mathbf{r}_2 \\ \mathbf{v}_3 - \mathbf{v}_2 \end{bmatrix}
+         = \mathbf{T}\,\x, \qquad
+  \mathbf{T} = \begin{bmatrix}
+    \mathbf{0} & -\Id & \Id & \mathbf{0} & \mathbf{0} & \mathbf{0} \\
+    \mathbf{0} & \mathbf{0} & \mathbf{0} & \mathbf{0} & -\Id & \Id
+  \end{bmatrix} \in \mathbb{R}^{6\times 18},
+  \label{eq:relative-state}
+\end{equation}
+with the $3\times3$ blocks acting on $\x=[\mathbf{r}_1;\mathbf{r}_2;\mathbf{r}_3;
+\mathbf{v}_1;\mathbf{v}_2;\mathbf{v}_3]$ in state order.
+
+\paragraph{It is derived, not measured.}
+$\bm{d}$ is not a filter state and is never added to $\x$. It is an affine
+(here linear) function of the estimated state, so its estimate and uncertainty
+follow exactly from the filter output, with no extra propagation or
+linearization:
+\begin{equation}
+  \hat{\bm{d}}_k^+ = \mathbf{T}\,\xh_k^+, \qquad
+  \Pm_{d,k}^+ = \mathbf{T}\,\Pm_k^+\,\mathbf{T}^\top
+  = \Pm_{33} + \Pm_{22} - \Pm_{23} - \Pm_{32}\ \text{(position block)}.
+  \label{eq:relative-cov}
+\end{equation}
+The cross-covariances $\Pm_{23}$ matter: they reduce the relative uncertainty
+when the two bodies' errors are positively correlated, so $\Pm_{d}$ cannot be
+formed from the per-body blocks alone. For the Monte Carlo error samples
+$\bm{e}^{(i)} = \x^{(i)} - \xh^{(i)}$ the same map applies,
+$\bm{e}_d^{(i)} = \mathbf{T}\bm{e}^{(i)}$, so the relative-state samples
+reuse the existing runs. The sensors in rows 15 and 16 of
+Table~\ref{tab:sensor_list} observe $\bm{d}$ directly, and their Jacobians
+factor through it, $\Hm = (\partial\bm{h}/\partial\bm{d})\,\mathbf{T}$
+(Sec.~\ref{sec:sensors}).
+
+\paragraph{Tether frame.}
+The distribution is expressed in a frame defined by the tether geometry:
+\begin{equation}
+  \hat{\mathbf{e}}_1 = \frac{\mathbf{r}_2-\mathbf{r}_1}{\norm{\mathbf{r}_2-\mathbf{r}_1}},
+  \qquad
+  \hat{\mathbf{e}}_3 = \frac{(\mathbf{r}_2-\mathbf{r}_1)\times(\mathbf{v}_2-\mathbf{v}_1)}
+                         {\norm{(\mathbf{r}_2-\mathbf{r}_1)\times(\mathbf{v}_2-\mathbf{v}_1)}},
+  \qquad
+  \hat{\mathbf{e}}_2 = \hat{\mathbf{e}}_3\times\hat{\mathbf{e}}_1.
+  \label{eq:tether-frame}
+\end{equation}
+For a spinning tether $\hat{\mathbf{e}}_1$ is along the tether, $\hat{\mathbf{e}}_3$
+is the spin axis, and $\hat{\mathbf{e}}_2$ is the in-plane transverse direction.
+Let $\mathbf{C}$ have rows $\hat{\mathbf{e}}_1^\top,\hat{\mathbf{e}}_2^\top,
+\hat{\mathbf{e}}_3^\top$ (resolved in the CR3BP rotating frame, in which
+the state and the velocities $\mathbf{v}_i$ are expressed). Then
+\begin{equation}
+  \bm{d}_{\mathrm{tf}} = \mathrm{blkdiag}(\mathbf{C},\mathbf{C})\,\bm{d}, \qquad
+  \Pm_{d,\mathrm{tf}} = \mathbf{M}\,\Pm\,\mathbf{M}^\top, \qquad
+  \mathbf{M} = \mathrm{blkdiag}(\mathbf{C},\mathbf{C})\,\mathbf{T}.
+\end{equation}
+
+\paragraph{Procedure.}
+\begin{enumerate}
+  \item Evaluate $\mathbf{C}$ once from the reference run's final posterior
+        estimate $\xh_K^+$ (the best available knowledge of the tether
+        geometry; the truth is not available to a real filter). The frame is
+        then a fixed, deterministic rotation shared by every Monte Carlo sample
+        and by the covariance.
+  \item Form $\mathbf{M}$, and map the final-time Monte Carlo errors and the
+        final posterior covariance: $\bm{e}_{d,\mathrm{tf}}^{(i)}=\mathbf{M}\bm{e}_K^{(i)}$,
+        $\Pm_{d,\mathrm{tf}}=\mathbf{M}\Pm_K^+\mathbf{M}^\top$.
+  \item Rescale to physical units (m and mm/s), divide each component by its
+        predicted standard deviation $\sqrt{[\Pm_{d,\mathrm{tf}}]_{jj}}$, and
+        compare to $\mathcal{N}(0,\mathrm{corr}(\Pm_{d,\mathrm{tf}}))$:
+        histograms against the unit normal on the diagonal, samples with the
+        $3\sigma$ covariance ellipse below it, and sample minus predicted
+        correlation above it. Report predicted standard deviation against
+        sample RMS for each component.
+\end{enumerate}
+
+\paragraph{Evaluation times.}
+The procedure is applied at two final-time endpoints, each with its own figure
+and table: the last measurement update ($t=110$ min), and the end of the
+scenario ($t=120$ min, a 10-minute coast after the last update), which is a
+prediction only. At the second endpoint the reference run's estimate and
+covariance are the filter's open-loop prediction from $K$, so $\Pm$ includes
+process noise accumulated over the final leg, while the simulated truth carries
+none. Sample spreads below the predicted values are therefore expected there.
+Each Monte Carlo run is propagated from its last posterior to $t=120$ min
+without drawing any further random numbers, so no earlier result changes.
+
+\paragraph{Caveats.}
+Because $\mathbf{C}$ is taken from the estimate, the frame's own error is
+ignored; this is a first-order approximation, accurate when the estimate error
+is small relative to the tether length. $\hat{\mathbf{e}}_1$ is undefined if
+$\mathbf{r}_1=\mathbf{r}_2$, and $\hat{\mathbf{e}}_3$ is undefined if
+$\mathbf{v}_2-\mathbf{v}_1$ is parallel to $\mathbf{r}_2-\mathbf{r}_1$ (a
+non-spinning tether). The sample correlations have a standard error of about
+$1/\sqrt{N}$ for $N$ runs.
+
 \end{document}
