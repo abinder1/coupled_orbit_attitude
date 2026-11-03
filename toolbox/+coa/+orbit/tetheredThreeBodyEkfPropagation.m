@@ -5,7 +5,8 @@ function packed_derivative = tetheredThreeBodyEkfPropagation(normalized_time, ..
                                                              mass_2_fraction, ...
                                                              tether_length_rate, ...
                                                              accel_fn, ...
-                                                             process_noise)
+                                                             process_noise, ...
+                                                             spring_damper)
     % TETHEREDTHREEBODYEKFPROPAGATION ODE right-hand side for EKF propagation.
     %   packed_derivative = coa.orbit.tetheredThreeBodyEkfPropagation( ...
     %       normalized_time, packed_state, mass_2_fraction, ...
@@ -23,6 +24,20 @@ function packed_derivative = tetheredThreeBodyEkfPropagation(normalized_time, ..
     %   Lyapunov equation (Eq. 5) of derivations/ekf_equations.tex:
     %       P_dot = F*P + P*F' + G*Q*G'.
     %
+    %   packed_derivative = coa.orbit.tetheredThreeBodyEkfPropagation( ...
+    %       normalized_time, packed_state, mass_2_fraction, ...
+    %       tether_length_rate, accel_fn, process_noise, spring_damper)
+    %   replaces the rigid tether constraint with the spring-damper tether of
+    %   coa.orbit.tetherSpringDamperAccel, which drives |p2 - p1| toward
+    %   L(t) = initial_length + tether_length_rate * normalized_time. Here
+    %   normalized_time is the time since the instant at which the length equals
+    %   initial_length, so it must share the origin of the truth model; a
+    %   solver restarted at t = 0 needs initial_length updated to the current
+    %   reference. spring_damper is a scalar struct with fields initial_length,
+    %   stiffness, and damping (nondimensional, k = wn^2, c = 2 * zeta * wn).
+    %   An empty struct (the default) keeps the rigid constraint. The process
+    %   noise is unchanged and was derived for the rigid tether.
+    %
     %   The mode is selected by the length of packed_state (18 or 342); any
     %   other length is rejected. A 342-element packed_state requires
     %   process_noise to contain all three fields below (otherwise MATLAB
@@ -36,9 +51,9 @@ function packed_derivative = tetheredThreeBodyEkfPropagation(normalized_time, ..
     %   and bodies 1-2.
     %
     %   Inputs:
-    %     normalized_time     Nondimensional time. Required by the ODE solver
-    %                         signature but unused: accel_fn and the
-    %                         process-noise PSDs are assumed time-invariant.
+    %     normalized_time     Nondimensional time. Unused for the rigid tether
+    %                         (accel_fn and the process-noise PSDs are assumed
+    %                         time-invariant); sets L(t) for the spring-damper.
     %     packed_state        18x1 or 342x1 column vector, described above.
     %     mass_2_fraction     eta = m2 / (m1 + m2); body 1 has mass fraction
     %                         1 - eta.
@@ -64,15 +79,21 @@ function packed_derivative = tetheredThreeBodyEkfPropagation(normalized_time, ..
     %   Output:
     %     packed_derivative   Column vector the same size as packed_state.
     arguments
-        normalized_time (1, 1) double %#ok<INUSA>
+        normalized_time (1, 1) double
         packed_state double {mustBeStateVectorLength}
         mass_2_fraction (1, 1) double
         tether_length_rate (1, 1) double
         accel_fn (1, 1) function_handle
         process_noise (1, 1) struct = struct()
+        spring_damper (1, 1) struct = struct()
     end
 
     propagate_covariance = numel(packed_state) > 18;
+    use_spring_damper = ~isempty(fieldnames(spring_damper));
+    if use_spring_damper
+        spring_args = {spring_damper.initial_length, tether_length_rate, ...
+                       spring_damper.stiffness, spring_damper.damping};
+    end
 
     %% Unpack the state
     position_1 = packed_state(1:3);
@@ -89,18 +110,35 @@ function packed_derivative = tetheredThreeBodyEkfPropagation(normalized_time, ..
     %% State propagation: x_dot = f(x)
     % Acceleration Jacobians are only evaluated when covariance is propagated.
     if propagate_covariance
-        [tether_acceleration, ...
-         tether_acceleration_position_jacobian, ...
-         tether_acceleration_velocity_jacobian] = ...
-            coa.orbit.tetherAccel(state_1, state_2, mass_2_fraction, ...
-                                  tether_length_rate, accel_fn);
+        if use_spring_damper
+            [tether_acceleration, ...
+             tether_acceleration_position_jacobian, ...
+             tether_acceleration_velocity_jacobian] = ...
+                coa.orbit.tetherSpringDamperAccel(normalized_time, state_1, ...
+                                                  state_2, mass_2_fraction, ...
+                                                  spring_args{:}, accel_fn);
+        else
+            [tether_acceleration, ...
+             tether_acceleration_position_jacobian, ...
+             tether_acceleration_velocity_jacobian] = ...
+                coa.orbit.tetherAccel(state_1, state_2, mass_2_fraction, ...
+                                      tether_length_rate, accel_fn);
+        end
         [acceleration_3, ...
          body_3_acceleration_position_jacobian, ...
          body_3_acceleration_velocity_jacobian] = accel_fn(state_3);
     else
-        tether_acceleration = coa.orbit.tetherAccel(state_1, state_2, ...
-                                                    mass_2_fraction, ...
-                                                    tether_length_rate, accel_fn);
+        if use_spring_damper
+            tether_acceleration = ...
+                coa.orbit.tetherSpringDamperAccel(normalized_time, state_1, ...
+                                                  state_2, mass_2_fraction, ...
+                                                  spring_args{:}, accel_fn);
+        else
+            tether_acceleration = coa.orbit.tetherAccel(state_1, state_2, ...
+                                                        mass_2_fraction, ...
+                                                        tether_length_rate, ...
+                                                        accel_fn);
+        end
         acceleration_3 = accel_fn(state_3);
     end
 

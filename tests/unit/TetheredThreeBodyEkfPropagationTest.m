@@ -102,6 +102,49 @@ classdef TetheredThreeBodyEkfPropagationTest < matlab.unittest.TestCase
             tc.verifyTrue(all(isfinite(y), "all"));
         end
 
+        function springDamperDerivativeMatchesTetherModel(tc, state)
+            [~, ~, fn] = defaultInputs();
+            model = struct("initial_length", 0.1, "stiffness", 3, "damping", 4);
+            d = ekf(0.2, state, 0.3, 0.05, fn, struct(), model);
+
+            [x1, x2, x3] = bodyStates(state);
+            expected = coa.orbit.tetherSpringDamperAccel(0.2, x1, x2, 0.3, 0.1, ...
+                                                         0.05, 3, 4, fn);
+            tc.verifyEqual(d(1:9), state(10:18));
+            tc.verifyEqual(d(10:15), expected);
+            tc.verifyEqual(d(16:18), fn(x3));
+        end
+
+        function springDamperCovarianceUsesItsJacobian(tc, state)
+            % With zero noise and P = I, P_dot = F + F', so the symmetric part
+            % of the numerical Jacobian of the state derivative must match.
+            [~, ~, fn, ~, no_noise] = defaultInputs();
+            model = struct("initial_length", 0.1, "stiffness", 3, "damping", 4);
+            packed = [state; reshape(eye(18), [], 1)];
+            d = ekf(0.2, packed, 0.3, 0.05, fn, no_noise, model);
+            actual = reshape(d(19:end), [18, 18]);
+
+            step = 1e-6;
+            jacobian = zeros(18);
+            for k = 1:18
+                shift = zeros(18, 1);
+                shift(k) = step;
+                jacobian(:, k) = (ekf(0.2, state + shift, 0.3, 0.05, fn, ...
+                                      struct(), model) - ...
+                                  ekf(0.2, state - shift, 0.3, 0.05, fn, ...
+                                      struct(), model)) / (2 * step);
+            end
+            expected = jacobian + jacobian';
+            tc.verifyEqual(actual, expected, ...
+                           "AbsTol", 1e-5 * max(abs(expected(:))));
+        end
+
+        function emptySpringDamperKeepsRigidTether(tc, state)
+            [~, ~, fn] = defaultInputs();
+            tc.verifyEqual(ekf(0.2, state, 0.3, 0.05, fn, struct(), struct()), ...
+                           ekf(0.2, state, 0.3, 0.05, fn));
+        end
+
         % (3) State derivative
 
         function stateDerivativeMatchesBodyModels(tc, state, mass_2_fraction, ...

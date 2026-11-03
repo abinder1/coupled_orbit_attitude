@@ -15,3 +15,7 @@
   CR3BP integration starting from a broken length constraint, for several Ldot.
   Figures cover length and rate error against the exact theory, tension and its
   feedback split, trajectory/spin divergence, geometry, and solver cost.
+  `tetherSpringDamperAccel` also returns Jacobians (`[a, da_dp, da_dv, tension]`),
+  and `coa.orbit.tetheredThreeBodyEkfPropagation` accepts an optional
+  `spring_damper` struct (`initial_length`, `stiffness`, `damping`) to use it in
+  place of the rigid `tetherAccel`.
