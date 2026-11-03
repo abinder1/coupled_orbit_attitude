@@ -11,3 +11,10 @@
 - Added `coa.orbit.tetherSpringDamperDynamics` (state-only spring-damper tether
   with optional centripetal/gravity-gradient feedforward) and the comparison and
   stiffness/damping sweep `examples/tetherSpringDamperDemo.m`.
+- Added `coa.orbit.tetherSpringDamperAccel`, a states-only spring-damper tether
+  acceleration that drives the m1-m2 separation to `L(t) = L_0 + Ldot * t`, and
+  `examples/tetherSpringDamperAccelDemo.m`, which compares a critically damped
+  tether (`c = 2*sqrt(k)`) against one with no spring or damper over a one-day
+  CR3BP integration starting from a broken length constraint, for several Ldot.
+  Figures cover length and rate error against the exact theory, tension and its
+  feedback split, trajectory/spin divergence, geometry, and solver cost.
