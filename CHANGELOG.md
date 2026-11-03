@@ -8,9 +8,6 @@
 - `examples/tetherFilterDemo.m`: each plot can now be set to `"off"`, `"save"`
   (export to file and close) or `"show"` via `config.plot_modes`; saved files go
   to `config.plot_output_folder`.
-- Added `coa.orbit.tetherSpringDamperDynamics` (state-only spring-damper tether
-  with optional centripetal/gravity-gradient feedforward) and the comparison and
-  stiffness/damping sweep `examples/tetherSpringDamperDemo.m`.
 - Added `coa.orbit.tetherSpringDamperAccel`, a states-only spring-damper tether
   acceleration that drives the m1-m2 separation to `L(t) = L_0 + Ldot * t`, and
   `examples/tetherSpringDamperAccelDemo.m`, which compares a critically damped
