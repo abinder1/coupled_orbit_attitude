@@ -1,8 +1,10 @@
 % Copyright (c) 2026 Andrew Binder
 
-function [a, tension] = tetherSpringDamperAccel(t, x1, x2, eta, initial_length, ...
-                                                length_dot, stiffness, damping, ...
-                                                accel_fn)
+function [a, da_dp, da_dv, tension] = tetherSpringDamperAccel(t, x1, x2, eta, ...
+                                                              initial_length, ...
+                                                              length_dot, ...
+                                                              stiffness, damping, ...
+                                                              accel_fn)
     % TETHERSPRINGDAMPERACCEL Two masses driven toward a prescribed tether length.
     %   a = coa.orbit.tetherSpringDamperAccel(t, x1, x2, eta, initial_length, ...
     %   length_dot, stiffness, damping, accel_fn) returns the stacked 6x1
@@ -19,13 +21,20 @@ function [a, tension] = tetherSpringDamperAccel(t, x1, x2, eta, initial_length, 
     %
     %   which includes the centripetal term (|d_dot|^2 - L_dot^2) / L. Without
     %   that term the spring would have to carry the full spin load and the
-    %   system becomes very stiff. This is a states-only function; it does not
-    %   return Jacobians.
+    %   system becomes very stiff.
     %
-    %   [a, tension] = coa.orbit.tetherSpringDamperAccel(...) also returns the
-    %   scalar tension, the relative acceleration (force divided by reduced
-    %   mass) the tether applies along the line of sight. It is positive when
-    %   the tether pulls the masses together.
+    %   [a, da_dp, da_dv] = coa.orbit.tetherSpringDamperAccel(...) also returns
+    %   the 6x6 partials of [a1; a2] with respect to [p1; p2] and [v1; v2], in
+    %   the same layout as coa.orbit.tetherAccel. accel_fn must then return its
+    %   own Jacobians, [a, da_dp, da_dv] = accel_fn(x). Unlike tetherAccel, the
+    %   length rate is the measured |d|-dot rather than the constant length_dot,
+    %   so the Jacobian is exact for the off-constraint states this model allows.
+    %
+    %   [a, da_dp, da_dv, tension] = coa.orbit.tetherSpringDamperAccel(...)
+    %   also returns the scalar tension, the relative acceleration (force
+    %   divided by reduced mass) the tether applies along the line of sight. It
+    %   is positive when the tether pulls the masses together. Request fewer
+    %   outputs to skip the Jacobian work.
     %
     %   Inputs:
     %     t               scalar time, in the same units as length_dot.
@@ -71,12 +80,50 @@ function [a, tension] = tetherSpringDamperAccel(t, x1, x2, eta, initial_length, 
     length_accel = -stiffness * length_error - damping * rate_error;
     centripetal = (dot(d_dot, d_dot) - length_rate^2) / length;
 
-    a1 = accel_fn(x1);
-    a2 = accel_fn(x2);
+    if nargout > 1
+        [a1, a1_dp, a1_dv] = accel_fn(x1);
+        [a2, a2_dp, a2_dv] = accel_fn(x2);
+    else
+        a1 = accel_fn(x1);
+        a2 = accel_fn(x2);
+    end
 
     % L_ddot = e . d_ddot + centripetal, with d_ddot = (a2 - a1) - tension * e.
-    tension = dot(line_of_sight, a2 - a1) + centripetal - length_accel;
+    relative_accel = a2 - a1;
+    tension = dot(line_of_sight, relative_accel) + centripetal - length_accel;
     correction = tension * line_of_sight;
 
     a = [a1 + eta * correction; a2 - (1 - eta) * correction];
+
+    if nargout > 1
+        I3 = eye(3);
+        transverse = I3 - line_of_sight * line_of_sight';
+        rate_dd = (transverse * d_dot)' / length;
+
+        % Gradient of the tension with its explicit dependence on d and d_dot;
+        % the dependence through a2 - a1 is added below.
+        tension_dd = (transverse * relative_accel)' / length + ...
+                     (damping - 2 * length_rate / length) * rate_dd + ...
+                     (stiffness - centripetal / length) * line_of_sight';
+        tension_dv = 2 * (d_dot - length_rate * line_of_sight)' / length + ...
+                     damping * line_of_sight';
+
+        tension_dp1 = -tension_dd - line_of_sight' * a1_dp;
+        tension_dp2 = tension_dd + line_of_sight' * a2_dp;
+        tension_dv1 = -tension_dv - line_of_sight' * a1_dv;
+        tension_dv2 = tension_dv + line_of_sight' * a2_dv;
+
+        % correction = tension * e, and e depends on d only (de/dd = P / L).
+        turning = tension * transverse / length;
+        correction_dp1 = line_of_sight * tension_dp1 - turning;
+        correction_dp2 = line_of_sight * tension_dp2 + turning;
+        correction_dv1 = line_of_sight * tension_dv1;
+        correction_dv2 = line_of_sight * tension_dv2;
+
+        comp = 1 - eta;
+        da_dp = [a1_dp + eta * correction_dp1, eta * correction_dp2; ...
+                 -comp * correction_dp1, a2_dp - comp * correction_dp2];
+        da_dv = [a1_dv + eta * correction_dv1, eta * correction_dv2; ...
+                 -comp * correction_dv1, a2_dv - comp * correction_dv2];
+    end
 end

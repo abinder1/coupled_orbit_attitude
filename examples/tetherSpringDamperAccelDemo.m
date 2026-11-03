@@ -227,8 +227,9 @@ function [state_derivative, tension] = springDamperDynamics(t, state, problem, .
     body_2 = [state(4:6); state(10:12)];
     args = {problem.eta, problem.length, case_args.rate, case_args.stiffness, ...
             case_args.damping, problem.accel_fn};
-    [acceleration, tension] = coa.orbit.tetherSpringDamperAccel(t, body_1, body_2, ...
-                                                                args{:});
+    spring_args = [{t, body_1, body_2}, args];
+    [acceleration, ~, ~, tension] = ...
+        coa.orbit.tetherSpringDamperAccel(spring_args{:});
     state_derivative = [state(7:12); acceleration];
 end
 

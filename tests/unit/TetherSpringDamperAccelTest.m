@@ -61,8 +61,9 @@ classdef TetherSpringDamperAccelTest < matlab.unittest.TestCase
         function returnsTensionAlongLineOfSight(tc)
             x1 = zeros(6, 1);
             x2 = [1.2; 0; 0; 0; 0; 0];
-            [a, tension] = coa.orbit.tetherSpringDamperAccel(0, x1, x2, 0.5, 1, 0, ...
-                                                             4, 0, @freeSpace);
+            fn = @freeSpaceWithJacobians;
+            [a, ~, ~, tension] = coa.orbit.tetherSpringDamperAccel(0, x1, x2, 0.5, ...
+                                                                   1, 0, 4, 0, fn);
             tc.verifyEqual(tension, 4 * 0.2, 'AbsTol', 1e-12);
             tc.verifyEqual(a(4) - a(1), -tension, 'AbsTol', 1e-12);
         end
@@ -98,11 +99,67 @@ classdef TetherSpringDamperAccelTest < matlab.unittest.TestCase
             tc.verifyEqual(lengths, length_0 + length_dot * t, 'AbsTol', 1e-6);
         end
 
+        function jacobiansMatchFiniteDifferences(tc, eta)
+            % Off-constraint state, nonzero gains, and the full CR3BP field.
+            [x1, x2, fn] = jacobianInputs();
+            args = {eta, 0.1, 1e-3, 3, 4, fn};
+            [~, da_dp, da_dv] = coa.orbit.tetherSpringDamperAccel(0.2, x1, x2, ...
+                                                                  args{:});
+            [numeric_dp, numeric_dv] = finiteDifferenceJacobians(x1, x2, args);
+            scale = max(abs([numeric_dp(:); numeric_dv(:)]));
+            tc.verifyEqual(da_dp, numeric_dp, 'AbsTol', 1e-5 * scale);
+            tc.verifyEqual(da_dv, numeric_dv, 'AbsTol', 1e-5 * scale);
+        end
+
+        function jacobiansMatchFiniteDifferencesWithZeroGains(tc)
+            [x1, x2, fn] = jacobianInputs();
+            args = {0.4, 0.1, 1e-3, 0, 0, fn};
+            [~, da_dp, da_dv] = coa.orbit.tetherSpringDamperAccel(0.2, x1, x2, ...
+                                                                  args{:});
+            [numeric_dp, numeric_dv] = finiteDifferenceJacobians(x1, x2, args);
+            scale = max(abs([numeric_dp(:); numeric_dv(:)]));
+            tc.verifyEqual(da_dp, numeric_dp, 'AbsTol', 1e-5 * scale);
+            tc.verifyEqual(da_dv, numeric_dv, 'AbsTol', 1e-5 * scale);
+        end
+
     end
+end
+
+function [x1, x2, fn] = jacobianInputs()
+    x1 = [0.6; 0.1; 0.12; 0.02; 0.24; 0.01];
+    x2 = [0.67; 0.04; 0.17; 0.03; 0.2; 0.02];
+    fn = @(x) coa.orbit.cr3bp(x, 0.0121);
+end
+
+function [da_dp, da_dv] = finiteDifferenceJacobians(x1, x2, args)
+    % Central differences of the stacked acceleration with respect to
+    % [p1; p2] and [v1; v2].
+    x = [x1; x2];
+    step = 1e-6;
+    numeric = zeros(6, 12);
+    for k = 1:12
+        shift = zeros(12, 1);
+        shift(k) = step;
+        numeric(:, k) = (stackedAccel(x + shift, args) - ...
+                         stackedAccel(x - shift, args)) / (2 * step);
+    end
+    % x is ordered [p1; v1; p2; v2].
+    da_dp = numeric(:, [1:3, 7:9]);
+    da_dv = numeric(:, [4:6, 10:12]);
+end
+
+function a = stackedAccel(x, args)
+    a = coa.orbit.tetherSpringDamperAccel(0.2, x(1:6), x(7:12), args{:});
 end
 
 function a = freeSpace(~)
     a = zeros(3, 1);
+end
+
+function [a, da_dp, da_dv] = freeSpaceWithJacobians(~)
+    a = zeros(3, 1);
+    da_dp = zeros(3);
+    da_dv = zeros(3);
 end
 
 function [x1, x2] = spinningPair(length, spin, eta)
