@@ -1,15 +1,17 @@
 % Copyright (c) 2026 Andrew Binder
 
 % tetherHaloDemo
-%   Demonstrates coa.orbit.tetherAccel by propagating a spinning two-mass tether
+%   Demonstrates coa.orbit.tetherSpringDamperAccel (and, as an option,
+%   coa.orbit.tetherAccel) by propagating a spinning two-mass tether
 %   that is carried along a CR3BP halo orbit, with its length prescribed as
 %   L(t) = L0 + Ldot * t. Three cases are compared: reeling in (Ldot = -0.5 m/s),
 %   a fixed-length tether (Ldot = 0), and reeling out (Ldot = +0.5 m/s).
 %
-%   Each mass moves under the unconstrained CR3BP acceleration plus the
-%   constraint force that keeps their separation on the prescribed schedule.
-%   tetherAccel returns those constrained accelerations directly, given a handle
-%   to the single-particle CR3BP physics.
+%   Each mass moves under the unconstrained CR3BP acceleration plus a tether
+%   force along the line of sight. By default that force is a critically damped
+%   spring-damper on the length error; set use_spring_damper = false for the
+%   rigid constraint of tetherAccel. Both take a handle to the single-particle
+%   CR3BP physics and return the stacked accelerations directly.
 %
 %   Figures:
 %     1. Tether length versus time, with the constraint residual.
@@ -61,9 +63,22 @@ labels = ["Reel in, $\dot{L} = -0.5$ m/s", ...
           "Fixed length, $\dot{L} = 0$", ...
           "Reel out, $\dot{L} = +0.5$ m/s"];
 
-% The physics of a single unconstrained particle. tetherAccel calls this once
-% per mass, so any other force model with the same signature can be swapped in.
+% The physics of a single unconstrained particle. The tether model calls this
+% once per mass, so any other force model with the same signature (including
+% Jacobians when requested) can be swapped in.
 accel_fn = @(x) coa.orbit.cr3bp(x, mu);
+
+% Critically damped spring-damper tether (k = wn^2, c = 2 * wn, wn = spin
+% rate) driving the length toward L(t) = L0 + Ldot * t from t = 0. Set
+% use_spring_damper = false for the rigid tetherAccel constraint instead.
+use_spring_damper = true;
+natural_frequency = spin_rate * T_star;  % Nondimensional
+spring_damper = struct('initial_length', L / L_star, ...
+                       'stiffness', natural_frequency^2, ...
+                       'damping', 2 * natural_frequency);
+if ~use_spring_damper
+    spring_damper = struct();
+end
 
 t_eval = linspace(0, prop_days * 86400 / T_star, n_samples);
 
@@ -76,7 +91,8 @@ for k = 1:numel(cases)
     sv_0 = tetherInitialState(halo_IC, L / L_star, eta, ...
                               spin_rate * T_star, length_dot, lhat_0);
 
-    ode_func = @(~, sv) tetherDynamics(sv, eta, length_dot, accel_fn);
+    ode_func = @(t, sv) tetherDynamics(t, sv, eta, length_dot, accel_fn, ...
+                                       spring_damper);
     sol = ode113(ode_func, [t_eval(1), t_eval(end)], sv_0, ode_opts);
     sv = deval(sol, t_eval);
 
@@ -140,13 +156,22 @@ function sv_0 = tetherInitialState(com_state, length_nd, eta, spin_rate_nd, ...
     sv_0 = [com_pos + rel_cw; com_pos + rel_cm; com_vel + vel_cw; com_vel + vel_cm];
 end
 
-function sv_dot = tetherDynamics(sv, eta, length_dot, accel_fn)
-    % Time derivative of sv = [p_cw; p_cm; v_cw; v_cm]. tetherAccel returns the
-    % stacked constrained accelerations [a_cw; a_cm].
+function sv_dot = tetherDynamics(t, sv, eta, length_dot, accel_fn, spring_damper)
+    % Time derivative of sv = [p_cw; p_cm; v_cw; v_cm]. The tether model returns
+    % the stacked accelerations [a_cw; a_cm]: the critically damped spring-damper
+    % when spring_damper is a populated struct, otherwise the rigid constraint.
     x_cw = sv([1:3, 7:9]);
     x_cm = sv([4:6, 10:12]);
 
-    a = coa.orbit.tetherAccel(x_cw, x_cm, eta, length_dot, accel_fn);
+    if isempty(fieldnames(spring_damper))
+        a = coa.orbit.tetherAccel(x_cw, x_cm, eta, length_dot, accel_fn);
+    else
+        a = coa.orbit.tetherSpringDamperAccel(t, x_cw, x_cm, eta, ...
+                                              spring_damper.initial_length, ...
+                                              length_dot, ...
+                                              spring_damper.stiffness, ...
+                                              spring_damper.damping, accel_fn);
+    end
 
     sv_dot = [sv(7:12); a];
 end

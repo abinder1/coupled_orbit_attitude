@@ -18,7 +18,9 @@
   `tetherSpringDamperAccel` also returns Jacobians (`[a, da_dp, da_dv, tension]`),
   and `coa.orbit.tetheredThreeBodyEkfPropagation` accepts an optional
   `spring_damper` struct (`initial_length`, `stiffness`, `damping`) to use it in
-  place of the rigid `tetherAccel`. `examples/tetherCovarianceDemo.m` now
+  place of the rigid `tetherAccel`. `examples/tetherHaloDemo.m` now uses the
+  critically damped spring-damper by default (`use_spring_damper = false`
+  restores the rigid constraint). `examples/tetherCovarianceDemo.m` now
   uses the spring-damper tether with a COM/relative initial covariance
   (`coa.filter.tetherInitialCovariance`), checks it against the rigid tether,
   and compares the linear covariance (including spin phase) with a Monte Carlo
