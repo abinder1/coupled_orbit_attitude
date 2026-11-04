@@ -19,5 +19,7 @@
   and `coa.orbit.tetheredThreeBodyEkfPropagation` accepts an optional
   `spring_damper` struct (`initial_length`, `stiffness`, `damping`) to use it in
   place of the rigid `tetherAccel`. `examples/tetherCovarianceDemo.m` now
-  compares the two tethers (state, length variance, covariance growth) and
-  checks the spring-damper covariance against a Monte Carlo run.
+  uses the spring-damper tether with a COM/relative initial covariance
+  (`coa.filter.tetherInitialCovariance`), checks it against the rigid tether,
+  and compares the linear covariance (including spin phase) with a Monte Carlo
+  run.

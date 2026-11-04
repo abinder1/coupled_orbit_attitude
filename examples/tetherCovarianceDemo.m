@@ -61,10 +61,11 @@
 %   L_star, time T_star). Plots convert to km, m/s, and hours.
 %
 %   Things to remember when revisiting:
-%     - The initial covariance is diagonal (bodies uncorrelated), which does
-%       not respect the tether constraints, and the spinning-tether dynamics
-%       amplify it strongly. Expect large uncertainty growth for bodies 1
-%       and 2; the payload (free body) grows slowly.
+%     - The initial covariance is built from a loose COM and a tight relative
+%       state (coa.filter.tetherInitialCovariance), so it is nearly consistent
+%       with the tether constraint. The old diagonal form (every body
+%       independent) put a length error into P0 that the spin dynamics
+%       turned into a large spin-phase error.
 %     - The covariance entries are tiny (~1e-14), so ODE AbsTol must be
 %       scaled separately for the covariance block.
 %     - The tiny negative min eigenvalue printed in the summary is integrator
@@ -95,12 +96,18 @@ lhat_0 = [1; 0; 0];              % Initial unit vector from the CM toward body 1
 halo_ic = [0.831987145310294; 0; 0.12575552414079; 0; 0.239887839725451; 0];
 
 % Propagation span (kept short; sensitivity of these dynamics is large)
-prop_hours = 24;
+prop_hours = 5 * 24;
 t_end = prop_hours * 3600 / T_star;  % Nondimensional
 
-% Initial 1-sigma uncertainties, applied independently to every body
-initial_position_sigma_km = 100;
-initial_velocity_sigma_ms = 1;
+% Initial 1-sigma uncertainties. The tether pair is described by its center of
+% mass (COM) and its relative state: a loose COM with a tight relative state
+% keeps the errors almost parallel to the tether constraint.
+initial_sigma = struct('com_position', 100, ...          % [km]
+                       'com_velocity', 1, ...            % [m/s]
+                       'relative_position', 10 / 1000, ...    % [km]
+                       'relative_velocity', 1, ...    % [m/s]
+                       'payload_position', 100, ...      % [km]
+                       'payload_velocity', 1);           % [m/s]
 
 % Process-noise spectral densities (nondimensional), see the propagator header:
 %   tension_psd             radial (tension) noise on the tether, Eq. 20
@@ -162,12 +169,25 @@ initial_state = [initial_state(1:6); initial_state(13:15); ...
                  initial_state(7:12); initial_state(16:18)];
 
 %% Initial covariance
-% Diagonal: every position and velocity component independent, with equal
-% sigma per component (nondimensionalized from the km and m/s inputs).
-position_sigma = initial_position_sigma_km / L_star;
-velocity_sigma = initial_velocity_sigma_ms / 1000 * T_star / L_star;
-initial_covariance = diag([repmat(position_sigma^2, 9, 1); ...
-                           repmat(velocity_sigma^2, 9, 1)]);
+% P0 = A * A' with independent isotropic errors in the tether COM, the
+% relative state, and the payload (see coa.filter.tetherInitialCovariance).
+% The sigmas are converted from km and m/s to nondimensional units.
+position_to_nd = 1 / L_star;
+velocity_to_nd = T_star / L_star / 1000;
+nd_sigma = initial_sigma;
+for field = ["com_position", "relative_position", "payload_position"]
+    nd_sigma.(field) = initial_sigma.(field) * position_to_nd;
+end
+for field = ["com_velocity", "relative_velocity", "payload_velocity"]
+    nd_sigma.(field) = initial_sigma.(field) * velocity_to_nd;
+end
+[initial_covariance, initial_factor] = ...
+    coa.filter.tetherInitialCovariance(mass_2_fraction, nd_sigma);
+
+% Reference only: the old diagonal P0 with the COM sigma on every component.
+% It ignores the constraint, so it carries a large length error.
+diagonal_covariance = diag([repmat(nd_sigma.com_position^2, 9, 1); ...
+                            repmat(nd_sigma.com_velocity^2, 9, 1)]);
 
 %% Propagate the state and covariance, with and without process noise
 % Output times for the stored solution (deval interpolates the ODE solution)
@@ -580,17 +600,37 @@ linear_packed = propagatePacked(initial_state, initial_covariance, t_end, ...
                                 monte_carlo_times, linear_args, ode_opts);
 
 rng(1);
-sigma_vector = sqrt(diag(initial_covariance));
 samples = zeros(monte_carlo_count, 18, numel(monte_carlo_times));
 sample_args = {mass_2_fraction, tether_length_rate, accel_fn, struct(), ...
                spring_damper};
 fprintf('\nMonte Carlo check (%d samples)...\n', monte_carlo_count);
 for n = 1:monte_carlo_count
-    sample_state = initial_state + sigma_vector .* randn(18, 1);
+    sample_state = initial_state + initial_factor * randn(18, 1);
     sample_rhs = @(t, state) propagate(t, state, sample_args{:});
     sample_sol = ode113(sample_rhs, [0, t_end], sample_state, ...
                         odeset('RelTol', 1e-10, 'AbsTol', 1e-12));
     samples(n, :, :) = deval(sample_sol, monte_carlo_times);
+end
+
+% Spin-phase check: the linear phase 1-sigma (new P0 and the old diagonal P0)
+% against the Monte Carlo spread of the wrapped phase error.
+diagonal_packed = propagatePacked(initial_state, diagonal_covariance, t_end, ...
+                                  monte_carlo_times, linear_args, ode_opts);
+phase_new = phaseSigma(linear_packed);
+phase_diagonal = phaseSigma(diagonal_packed);
+separation_samples = samples(:, 4:6, :) - samples(:, 1:3, :);
+nominal_phase = atan2(linear_packed(5, :) - linear_packed(2, :), ...
+                      linear_packed(4, :) - linear_packed(1, :));
+phase_error = angle(exp(1i * (squeeze(atan2(separation_samples(:, 2, :), ...
+                                            separation_samples(:, 1, :))) - ...
+                              nominal_phase)));
+phase_sample = std(phase_error, 0, 1);
+phase_resultant = abs(mean(exp(1i * phase_error), 1));
+fprintf('\nSpin-phase 1-sigma [rad]: linear (new P0), linear (diagonal P0), MC\n');
+for k = round(linspace(1, numel(monte_carlo_times), 7))
+    fprintf('  t = %5.1f h   %8.4f   %8.4f   %8.4f   (R = %.3f)\n', ...
+            monte_carlo_times(k) * T_star / 3600, phase_new(k), ...
+            phase_diagonal(k), phase_sample(k), phase_resultant(k));
 end
 
 figure('Name', 'Linear covariance vs Monte Carlo', 'Color', 'w');
@@ -630,8 +670,6 @@ for panel = 1:2
     if panel == 1
         ylabel('Position 1\sigma, sqrt(tr P_{pp}) [km]');
         title('Position uncertainty');
-        y_limits = ylim;
-        ylim([y_limits(1), y_limits(2) * 100]);
         legend('Location', 'northwest', 'FontSize', 7);
     else
         ylabel('Velocity 1\sigma, sqrt(tr P_{vv}) [m/s]');
@@ -707,6 +745,22 @@ function history = lengthHistory(packed, reference_length, length_rate, rel_tol)
         history.length_sigma(k) = ...
             sqrt(abs(gradient' * position_covariance * gradient));
         history.length_sigma_floor(k) = sqrt(rel_tol * norm(position_covariance));
+    end
+end
+
+function sigma = phaseSigma(packed)
+    % 1-sigma of the tether spin phase atan2(dy, dx), d = p2 - p1, from P.
+    n_times = size(packed, 2);
+    sigma = zeros(1, n_times);
+    for k = 1:n_times
+        separation = packed(4:6, k) - packed(1:3, k);
+        covariance = reshape(packed(19:end, k), [18, 18]);
+        gradient = zeros(18, 1);
+        planar_gradient = [-separation(2); separation(1)] / ...
+                          (separation(1)^2 + separation(2)^2);
+        gradient(4:5) = planar_gradient;
+        gradient(1:2) = -planar_gradient;
+        sigma(k) = sqrt(gradient' * covariance * gradient);
     end
 end
 
