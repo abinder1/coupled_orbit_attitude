@@ -24,7 +24,7 @@
 \newcommand{\norm}[1]{\left| \left| #1 \right| \right|_{2}}
 
 %%%%%%%%%%%%% Title card content %%%%%%%%%%%%%
-\title{Lagrangian-Based Constraint Derivations}
+\title{Rigid-Tether Lagrangian Dynamics: Reference Derivation}
 \author{}
 \date{\today}
 
@@ -103,7 +103,14 @@ circle about $m_1$, whose radius changes at the rate $\dot{L}$.}
 \label{fig:setup}
 \end{figure}
 
-This note derives the equations of motion for two point masses, $m_1$ and $m_2$, moving in the circular restricted three-body problem (CR3BP) while subject to a prescribed, possibly time-varying, constraint on their separation (for example, a tether of length $\dot{L} t + L_0$).  It then derives the Jacobian of the resulting dynamics, as needed for state transition matrix propagation.
+This note derives the ideal rigid-tether equations of motion for two point
+masses, $m_1$ and $m_2$, moving in the circular restricted three-body problem
+(CR3BP) with prescribed separation $\dot{L}t+L_0$. It then derives the
+Jacobian of those constrained accelerations. This model remains useful as a
+reference case and for the rigid-tether option in the code; the current
+compliant model is the critically damped spring-damper described in
+\texttt{ekf\_equations.tex} and implemented by
+\texttt{coa.orbit.tetherSpringDamperAccel}.
 
 The derivation proceeds in three steps:
 \begin{enumerate}
@@ -270,7 +277,7 @@ Inverting this system expresses the constrained accelerations as a linear map of
         \end{bmatrix}
 \end{equation}
 
-where $\mathbf{D} = (\mathbf{d} \mathbf{d}^T) / (\mathbf{d}^T \mathbf{d})$ is the projector onto the direction of $\mathbf{d}$, and the correction vector is
+where $\mathbf{D} = (\mathbf{d} \mathbf{d}^T) / (\mathbf{d}^T \mathbf{d})$ is the rank-one direction matrix along $\mathbf{d}$, and the correction vector is
 
 \begin{equation}
     \mathbf{q} = \frac{\dot{\mathbf{d}}^T \dot{\mathbf{d}} - \dot{L}^2}{\mathbf{d}^T \mathbf{d}} \mathbf{d}
@@ -347,7 +354,7 @@ Since $\pd{\mathbf{d}}{\mathbf{p}_1} = -\mathbf{I}$ and $\pd{\mathbf{d}}{\mathbf
 \end{split}
 \end{align}
 
-The projector $\mathbf{D}$ depends only on positions, so the velocity derivatives involve only the acceleration Jacobians:
+The direction matrix $\mathbf{D}$ depends only on positions, so the velocity derivatives involve only the acceleration Jacobians:
 
 \begin{align}
 \begin{split}

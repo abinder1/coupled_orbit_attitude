@@ -10,12 +10,13 @@
 
 \newcommand{\Pm}{\mathbf{P}}
 \newcommand{\Fm}{\mathbf{F}}
+\newcommand{\Gm}{\mathbf{G}}
 \newcommand{\Qm}{\mathbf{Q}}
 \newcommand{\norm}[1]{\left\lVert #1 \right\rVert}
 \newcommand{\ehat}{\hat{\bm{e}}}
 
-\title{Two Effects in the Spring-Damper Tether Covariance Demo:\\
-the Length-Variance Floor and the Breakdown of Linear Covariance Propagation}
+\title{Spring-Damper Tether Covariance Propagation:\\
+Numerical Limits, Initial Covariance, and Monte Carlo Checks}
 \author{}
 \date{}
 
@@ -26,30 +27,62 @@ the Length-Variance Floor and the Breakdown of Linear Covariance Propagation}
 
 \texttt{examples/tetherCovarianceDemo.m} propagates the state and covariance of
 two tether end masses (bodies 1 and 2) plus a free payload through the
-Earth--Moon CR3BP with \texttt{coa.orbit.tetheredThreeBodyEkfPropagation}. The
-tether is the critically damped spring-damper of
+Earth--Moon CR3BP with the tethered-three-body EKF propagator. The tether is
+the critically damped spring-damper of
 \texttt{coa.orbit.tetherSpringDamperAccel}, which drives the separation
 $\bm{d} = \bm{p}_2 - \bm{p}_1$ toward $L(t) = L_0 + \dot L\,t$. The covariance
-obeys
+is propagated with the analytic Jacobian of the same spring-damper dynamics:
 \begin{equation}
   \dot{\Pm} = \Fm\Pm + \Pm\Fm^{\top} + \Qm ,
   \label{eq:pdot}
 \end{equation}
-with $\Fm$ the analytic Jacobian of the dynamics. Two features appear in the
-figures when the span is extended to three days:
+where $\Qm=\Gm\mathbf{Q}\Gm^\top$ is the modeled process-noise contribution.
+The current demo uses a 72-hour span and a structured COM/relative initial
+covariance. Its tether-pair $1\sigma$ values are 100~km in COM position,
+1~m/s in COM velocity, 10~m in relative position, and 1~m/s in relative
+velocity; the independent payload uses 100~km and 1~m/s. The run exercises:
 \begin{enumerate}
-  \item the tether-length $1\sigma$ computed from $\Pm$ stops decaying and
-    wanders near a constant level, below an ``integration-error floor''
-    (Figures~5 and~6);
-  \item the linear $\Pm$ for bodies 1 and 2 keeps growing while the Monte Carlo
-    spread saturates (Figure~6).
+  \item decay of length uncertainty and a finite-precision floor when reading
+    the constrained direction from a full covariance matrix;
+  \item linear covariance versus nonlinear Monte Carlo for zero and nonzero
+    length-rate commands (Figures~6 and~7).
 \end{enumerate}
-Neither is a coding error. The first is a finite-precision effect of reading
-a small variance out of a large matrix. The second is a limit of linearization
-for a spinning body. Parameters used below: $L_0 = 200$~km, spin period
-$55$~min ($\Omega = 2\pi/3300$~rad/s), $\zeta = 1$, $\omega_n = \Omega$,
-initial $1\sigma$ of 1~km and $10^{-2}$~m/s per component, and process-noise
-PSD $q = 10^{-8}$ (nondimensional) for the tension channel.
+The length-variance floor is a numerical limitation, not physical uncertainty.
+The remaining Monte Carlo differences are model- and duration-dependent and
+should be assessed by quantity rather than described as a single divergence
+result. Parameters used below: $L_0=200$~km, spin period $55$~min
+($\Omega=2\pi/3300$~rad/s), $\zeta=1$, $\omega_n=\Omega$, and process-noise
+PSDs $10^{-8}$ (nondimensional) for the tether radial, tether transverse, and
+payload acceleration channels.
+
+\subsection{Initial covariance in COM and relative coordinates}
+
+The tether pair is initialized in center-of-mass and relative coordinates:
+\begin{equation}
+  \mathbf{c}=(1-\eta)\mathbf{p}_1+\eta\mathbf{p}_2,\qquad
+  \mathbf{r}=\mathbf{p}_2-\mathbf{p}_1,
+\end{equation}
+so
+\begin{equation}
+  \mathbf{p}_1=\mathbf{c}-\eta\mathbf{r},\qquad
+  \mathbf{p}_2=\mathbf{c}+(1-\eta)\mathbf{r}.
+\end{equation}
+Independent isotropic errors in $\mathbf{c}$ and $\mathbf{r}$ yield correlated
+body-position errors. For example,
+\begin{align}
+  \operatorname{Cov}(\mathbf{p}_1)
+    &=\left(\sigma_c^2+\eta^2\sigma_r^2\right)\mathbf{I}_3,\\
+  \operatorname{Cov}(\mathbf{p}_1,\mathbf{p}_2)
+    &=\left(\sigma_c^2-\eta(1-\eta)\sigma_r^2\right)\mathbf{I}_3,\\
+  \operatorname{Cov}(\mathbf{p}_2)
+    &=\left(\sigma_c^2+(1-\eta)^2\sigma_r^2\right)\mathbf{I}_3.
+\end{align}
+The same construction is used for velocities; the payload uncertainty is
+independent. In the demo, the factor $\mathbf{A}$ satisfies
+$\Pm_0=\mathbf{A}\mathbf{A}^\top$, and Monte Carlo initial errors are drawn
+as $\mathbf{A}\mathbf{z}$ with standard-normal $\mathbf{z}$. This lets the
+pair be poorly known in absolute position while keeping its initial relative
+position—and therefore its length—much better known.
 
 \section{Effect 1: the length variance and its floor}
 
@@ -70,27 +103,27 @@ where $\Pm_{pp}$ is the $6\times6$ position block of $\Pm$ for bodies 1 and 2.
 
 \subsection{True behavior without process noise}
 
-Let $e = L - L_{\mathrm{ref}}$. The spring-damper enforces, independent of
-$\dot L$,
+Let $e=L-L_{\mathrm{ref}}$, where
+$L_{\mathrm{ref}}=L_0+\dot L_{\mathrm{ref}}t$. The spring-damper dynamics give,
+independent of the constant commanded rate $\dot L_{\mathrm{ref}}$,
 \begin{equation}
   \ddot e + c\,\dot e + k\,e = 0, \qquad k = \omega_n^2,\; c = 2\zeta\omega_n .
 \end{equation}
-Every initial length uncertainty is therefore removed on the time scale
-$1/\omega_n$, and in the absence of process noise
-$\sigma_L^2 \to 0$ exponentially. The dense-grid evaluation of
-Eq.~\eqref{eq:sigmaL} confirmed this: the variance falls smoothly from
-$200\ \mathrm{m}^2$ to about $4\times10^{-3}\ \mathrm{m}^2$ by $1.1$~h. A
-state-only Monte Carlo run shows a length spread of about $10^{-6}$~m for the
-remainder of the span.
+For positive stiffness and damping, initial length and length-rate errors
+decay. With the current COM/relative covariance, the initial relative-position
+$1\sigma$ is 10~m; this is intentionally much smaller than the 100~km COM
+uncertainty. In a no-process-noise run, the physical length variance therefore
+decays, while the evaluated quadratic form eventually becomes limited by
+finite precision.
 
 \subsection{Why the linear value stops decaying}
 
-The other directions in $\Pm_{pp}$ are not damped. For the 3-day case they
-reach a size of about $10^2$~km, whereas the length direction should be at
-$10^{-6}$~m. Eq.~\eqref{eq:sigmaL} therefore subtracts nearly equal large
-numbers, and the result is limited by the error with which $\Pm$ was
-integrated. The tolerance $\mathrm{RelTol}$ applies to each element of $\Pm$,
-so the error in $\sigma_L^2$ scales as
+The other directions in $\Pm_{pp}$ are not damped and reach scales of order
+$10^2$~km in this setup, while the length direction is driven much smaller.
+Eq.~\eqref{eq:sigmaL} therefore subtracts nearly equal large numbers, and the
+result is limited by the error with which $\Pm$ was integrated. The tolerance
+$\mathrm{RelTol}$ applies to each element of $\Pm$, so the error in
+$\sigma_L^2$ scales as
 \begin{equation}
   \delta\!\left(\sigma_L^2\right) \sim \mathrm{RelTol}\;\norm{\Pm_{pp}},
   \qquad
@@ -103,19 +136,19 @@ the figures. Three observations follow.
   \item The floor grows with $\norm{\Pm_{pp}}$, so it rises as the covariance
     grows. After the true variance falls beneath it, the plotted quantity is
     integration error, not signal.
-  \item The error has no definite sign. In the 24-h run, 243 of 400 dense samples
-    of the quadratic form were negative. Clipping them to zero (as the first
-    version of the script did, with $\sqrt{\max(\cdot,0)}$) produced exact
-    zeros and visible breaks on a log axis. The script now plots
-    $\sqrt{\lvert\cdot\rvert}$ and the floor.
-  \item The roughly constant wobble near $1$~m in the 3-day no-noise run is this
-    error. It does not mean the length is uncertain by a meter; the Monte Carlo
-    spread is six orders of magnitude smaller.
+  \item The error has no definite sign. Clipping negative quadratic-form
+    values to zero creates exact zeros and breaks on a logarithmic axis. The
+    script plots $\sqrt{\lvert\cdot\rvert}$ together with the floor; values
+    below the floor are not meaningful uncertainty estimates.
+  \item A late-time plateau or wobble below the floor does not imply a
+    corresponding physical length uncertainty. It is the numerical residual
+    of evaluating a small constrained-direction variance from a much larger
+    covariance matrix.
 \end{itemize}
 
 \subsection{The Figure 5 level is real: steady-state variance with process noise}
 
-With process noise on, the true length variance does not go to zero. Axial
+With process noise on, the length variance does not go to zero. Axial
 noise enters the length equation as a white acceleration of PSD
 $S = q\,g_a^{2}$, where $g_a = 1/(\eta(1-\eta))$ is the relative-acceleration
 gain and $\eta = m_2/(m_1+m_2)$:
@@ -131,25 +164,30 @@ The stationary variance of this linear oscillator is
 With $\eta = 1/2$ ($g_a = 4$), $q = 10^{-8}$, $\zeta = 1$, and
 $\omega_n = \Omega T^{\star} = 714$ (nondimensional), Eq.~\eqref{eq:steady}
 gives $\sigma_e = 1.05\times10^{-8}\,L^{\star} \approx 4.05$~m. The script
-prints a final length $1\sigma$ of $4.1$~m for the spring-damper runs.
-So the plateau in Figure~5 is the physically correct steady state of the
-damped length error against axial process noise. It appears ``below the
-floor'' at late times only because the floor in Eq.~\eqref{eq:floor} grows
-with $\norm{\Pm_{pp}}$ and eventually rises above this $4$~m signal. When the
-floor exceeds the physical value, the curve cannot be trusted below the
-floor line. Reducing the floor would require a smaller $\mathrm{RelTol}$ or a
-covariance formulation that separates the constrained and unconstrained
-subspaces; neither was tried.
+prints a final length $1\sigma$ of $3.61$~m in the current 72-hour run. The
+simple stationary-oscillator estimate is therefore the right scale, but is
+not an exact match. The existing process-noise channels were derived for the
+rigid-tether model and have not been independently validated for the compliant
+tether; the estimate is a useful diagnostic, not proof that the PSD model is
+physically calibrated. At late times the heuristic floor in
+Eq.~\eqref{eq:floor} can also rise above the physical signal, in which case
+the plotted covariance-derived length uncertainty is not reliable.
 
 \section{Effect 2: linear covariance versus Monte Carlo}
 
 \subsection{Observation}
 
-With process noise off, the linear $\Pm$ and the sampled covariance of 100
-nonlinear runs agree for the first day (ratios 0.999--1.007), then separate.
-By 72~h the Monte Carlo $1\sigma$ of bodies 1 and 2 stays near $100$~km and
-$185$~m/s while the linear $\Pm$ continues to grow (final ratio 0.29). The
-payload, which does not spin, stays within 7--10\% of the linear value.
+The COM/relative initial covariance is important: the tether pair can have a
+large common position error without an equally large initial length error.
+With the current covariance and process noise off, the linearized phase and
+the Monte Carlo phase standard deviation are $1.296$ and $1.356$~rad at 72~h.
+At that time the Monte Carlo-to-linear position-$\sigma$ ratios are 1.028 and
+1.029 for bodies 1 and 2, respectively, and 1.071 for the payload. The
+corresponding velocity ratios for bodies 1 and 2 are 0.720 and 0.719 (payload:
+1.095). This is substantially different from the earlier independent,
+per-body initialization: the current run does not show the former large
+position-covariance divergence, although the velocity discrepancy remains
+material.
 
 \subsection{Source of the growth: spin-rate error}
 
@@ -160,30 +198,28 @@ $\omega$ itself is uncertain:
 \begin{equation}
   \sigma_\varphi(t) \approx \sigma_\omega\, t .
 \end{equation}
-The dominant source of $\sigma_\omega$ is the initial length error. The
-internal spring-damper force is central and exerts no torque about the tether
-center of mass, so the angular momentum $h = L\,v_t$ is conserved while the
-damper removes the length error. The initial relative tangential speed is
-$v_t = \Omega L_0$ and does not scale with an initial length error
-$\delta L_0$, so
+The central spring-damper force exerts no torque about the tether center of
+mass. As the damped length returns toward $L_0$, angular momentum
+$h=L\,v_t$ is conserved. For an initial length error $\delta L_0$ and an
+initial tangential-velocity error $\delta v_t$, with nominal initial speed
+$v_t=\Omega L_0$,
 \begin{equation}
-  h = (L_0 + \delta L_0)\,\Omega L_0 ,
-  \qquad
-  \omega_{\mathrm{final}} = \frac{h}{L_0^{2}} = \Omega\left(1 + \frac{\delta L_0}{L_0}\right),
+  h = (L_0+\delta L_0)(\Omega L_0+\delta v_t),\qquad
+  \omega_{\mathrm{final}} = \frac{h}{L_0^2}
+  \approx \Omega+\frac{\Omega\,\delta L_0+\delta v_t}{L_0}.
 \end{equation}
-giving
+For independent errors this gives
 \begin{equation}
-  \sigma_\omega \approx \Omega\,\frac{\sigma_{L_0}}{L_0}.
+  \sigma_\omega \approx
+  \frac{\sqrt{\Omega^2\sigma_{L_0}^2+\sigma_{v_t}^2}}{L_0}.
   \label{eq:sigma_omega}
 \end{equation}
-The diagonal $\Pm_0$ gives $\sigma_{L_0} = \sqrt{2}\cdot 1~\mathrm{km} = 1.41$~km,
-so $\sigma_\omega \approx 1.35\times10^{-5}$~rad/s, or $0.0485$~rad/h. The
-tangential-velocity contribution, $\sim 10^{-2}\,\mathrm{m/s}/L_0 \approx
-7\times10^{-8}$~rad/s, is negligible by comparison. The values from the linear
-$\Pm$ in the table below ($0.0438$~rad/h averaged over the first 6~h, and
-$1.137$~rad at 24~h) are consistent with this estimate. It also shows that the
-length constraint, though enforced, leaves a spin-rate error that grows into
-a large phase error.
+With the current $\sigma_{L_0}=10$~m and $\sigma_{v_t}=1$~m/s,
+$\sigma_{v_t}$ dominates and Eq.~\eqref{eq:sigma_omega} gives approximately
+$5\times10^{-6}$~rad/s, or $0.018$~rad/h. This predicts about $1.30$~rad of
+phase uncertainty over 72~h, consistent with the propagated linear result.
+Thus, a tight relative-position uncertainty alone does not guarantee a
+well-known spin phase; the relative-velocity uncertainty also matters.
 
 \subsection{Why the linearization fails}
 
@@ -196,9 +232,10 @@ resultant length is
     = e^{-\sigma_\varphi^{2}/2},
 \end{equation}
 and in the limit $\sigma_\varphi\to\infty$ the samples are uniform on the
-circle with standard deviation $\pi/\sqrt{3} \approx 1.81$~rad. Meanwhile the
-linear $\Pm$ keeps growing as $\sigma_\omega t$. The two diverge once
-$\sigma_\varphi \gtrsim 1$~rad.
+circle with circular standard deviation approaching $\pi/\sqrt{3}
+\approx1.81$~rad. This is a general warning about long-horizon linearized
+phase statistics, not a saturation reached by the current run: at 72~h its
+Monte Carlo phase standard deviation is $1.356$~rad.
 
 For a body at radius $a = L/2$ about the tether center of mass with its phase
 uniformly spread, each component has variance $a^2/2$, so
@@ -208,8 +245,9 @@ uniformly spread, each component has variance $a^2/2$, so
   \sqrt{\operatorname{tr}\Pm_{vv}} \to \Omega a \approx 190~\mathrm{m/s},
 \end{equation}
 which are the saturation levels seen in the Monte Carlo curves for bodies~1
-and~2 (about $100$~km and $185$~m/s). The linear $\Pm$ cannot saturate
-because it contains no wrapping.
+and~2 only in the broad-phase limit. The current Monte Carlo-to-linear
+velocity ratios below unity show that agreement in position and phase alone
+does not validate every covariance block.
 
 \subsection{Numerical check}
 
@@ -222,45 +260,57 @@ $\operatorname{atan2}$:
   Time [h] & Linear $\sigma_\varphi$ [rad] & Monte Carlo $\sigma_\varphi$ [rad] &
   $R$ (Monte Carlo) \\
   \midrule
-   0 & 0.0071 & 0.0071 & 1.000 \\
-   6 & 0.263  & 0.265  & 0.966 \\
-  12 & 0.554  & 0.558  & 0.856 \\
-  24 & 1.137  & 1.144  & 0.512 \\
-  36 & 1.719  & 1.595  & 0.210 \\
-  48 & 2.301  & 1.730  & 0.092 \\
-  72 & 3.466  & 1.719  & 0.071 \\
+   0 & 0.0001 & 0.0001 & 1.000 \\
+  12 & 0.2161 & 0.2340 & 0.973 \\
+  24 & 0.4321 & 0.4674 & 0.897 \\
+  36 & 0.6481 & 0.7007 & 0.783 \\
+  48 & 0.8641 & 0.9340 & 0.647 \\
+  60 & 1.0801 & 1.1674 & 0.505 \\
+  72 & 1.2960 & 1.3560 & 0.372 \\
   \bottomrule
 \end{tabular}
 \end{center}
-The two columns of $\sigma_\varphi$ agree to about 1\% while $\sigma_\varphi$
-is small, which independently supports the correctness of the Jacobian and
-Eq.~\eqref{eq:pdot}. At 24~h, $e^{-\sigma_\varphi^2/2} = 0.52$ matches the
-measured $R = 0.51$. At 72~h the Monte Carlo value is $1.72$~rad, close to the
-uniform-circle value of $1.81$~rad.
+The phase standard deviations agree within about 5\% through 72~h for this
+100-sample run. This supports the implemented Jacobian for this case, but is
+not a general proof of covariance consistency: the body-velocity covariance
+ratios remain notably below unity and the Monte Carlo sample is finite.
+
+\subsection{Nonzero length-rate cases}
+
+Figure~7 repeats the state/covariance comparison for $\dot L_{\mathrm{ref}}=
+\pm0.5$~m/s, with 100 state-only Monte Carlo samples per rate. Over 72~h, the
+body-1 position-$\sigma$ ratios (Monte Carlo / linear) are 1.005 for reel-in
+and 1.017 for reel-out. The corresponding velocity ratios are 0.273 and
+0.873; payload-position ratios are 1.079 for both. The nominal final lengths
+are 70.400~km and 329.600~km, matching the references to within
+$3\times10^{-6}$~m and $7.1\times10^{-8}$~m, respectively. These checks show
+that the commanded length schedule is tracked accurately and that position
+covariance agrees well for these samples; they also identify velocity
+covariance as an area requiring further investigation.
 
 \section{Consequences}
 
 \begin{itemize}
-  \item The spring-damper tether does what it is designed to do for the length
-    uncertainty. At 3~days the $\Pm$ length $1\sigma$ is about $4$~m, compared
-    with about $7\times10^{5}$~m for the rigid tether in the same run.
-  \item The linear covariance for a spinning body should be treated as valid
-    only while $\sigma_\varphi \lesssim 0.3$--$0.5$~rad. For these parameters
-    that is roughly 10--15~h. Beyond that, the linear $\Pm$ overstates the
-    spread of the spinning bodies (by $3.4\times$ in $1\sigma$ at 72~h), so an
-    EKF using it would compute Kalman gains from a covariance that does not
-    describe the true distribution.
-  \item For long spans, treat the spin phase differently (for example,
-    reset or re-estimate the phase frequently with measurements, use
-    an unscented or particle-style propagation for the spinning subsystem, or
-    carry the phase as an angle with wrapped statistics).
+  \item The COM/relative covariance keeps the initial tether-length uncertainty
+    small without forcing the tether center of mass to be well known. Relative
+    velocity uncertainty must also be chosen with spin-phase growth in mind.
+  \item For the 72-hour setup, spring-damper length uncertainty is about
+    $3.61$~m with process noise on, versus $2.64\times10^5$~m for the rigid
+    reference. The latter is not a like-for-like physical tether model: the
+    radial process noise is added after the rigid acceleration correction,
+    with no spring-damper feedback to restore the resulting length error.
+  \item The linearized phase and Monte Carlo phase agree closely in this
+    particular run, but body-velocity covariance does not. Assess position,
+    velocity, and phase statistics separately; a single aggregate ratio is
+    insufficient to certify covariance consistency.
   \item Reading a small variance out of $\Pm$ (the tether length, or any
     constrained direction) should be accompanied by a floor such as
     Eq.~\eqref{eq:floor}. Values below it should not be reported.
-  \item The process noise in the propagator was derived for the rigid tether.
-    Eq.~\eqref{eq:steady} shows that the spring-damper reshapes the effect
-    of the axial channel into a bounded steady-state variance; the validity of
-    the existing PSD values for a soft tether has not been verified.
+  \item The process-noise channels in the propagator were derived for the rigid
+    tether and have not been independently validated for the compliant
+    dynamics. Eq.~\eqref{eq:steady} is a useful scale check, not a substitute
+    for noise-model validation against physically representative Monte Carlo
+    trials.
 \end{itemize}
 
 \end{document}

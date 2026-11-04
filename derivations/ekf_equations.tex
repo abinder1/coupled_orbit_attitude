@@ -143,6 +143,71 @@ but the Joseph form remains symmetric positive semidefinite under round-off
 and is valid for any (possibly suboptimal) $\Km_k$.
 
 \appendix
+\section{Spring-Damper Tether Dynamics}
+
+The compliant tether replaces the ideal prescribed-length constraint with a
+central feedback force. Let
+\begin{equation}
+  \mathbf{d}=\mathbf{p}_2-\mathbf{p}_1,\qquad
+  L=\norm{\mathbf{d}},\qquad
+  \mathbf{e}=\frac{\mathbf{d}}{L},\qquad
+  \dot L=\mathbf{e}^{\top}(\dot{\mathbf{p}}_2-\dot{\mathbf{p}}_1),
+\end{equation}
+and define the reference length $L_{\mathrm{ref}}(t)=L_0+\dot L_{\mathrm{ref}}t$.
+For stiffness $k\geq0$ and damping $c\geq0$, the desired radial acceleration
+is
+\begin{equation}
+  \ddot L_{\mathrm{des}} =
+  -k(L-L_{\mathrm{ref}})-c(\dot L-\dot L_{\mathrm{ref}}).
+  \label{eq:sd-radial-accel}
+\end{equation}
+The geometric contribution from transverse relative velocity is
+\begin{equation}
+  a_{\mathrm{c}} =
+  \frac{\norm{\dot{\mathbf{p}}_2-\dot{\mathbf{p}}_1}^{2}-\dot L^{2}}{L}.
+\end{equation}
+Let $\mathbf{a}_1^0$ and $\mathbf{a}_2^0$ be the unconstrained accelerations.
+The scalar central-force magnitude required to realize
+Eq.~\eqref{eq:sd-radial-accel} is
+\begin{equation}
+  T = \mathbf{e}^{\top}(\mathbf{a}_2^0-\mathbf{a}_1^0)
+      + a_{\mathrm{c}}-\ddot L_{\mathrm{des}},
+\end{equation}
+with mass-weighted accelerations
+\begin{equation}
+  \ddot{\mathbf{p}}_1 = \mathbf{a}_1^0+\eta T\mathbf{e},\qquad
+  \ddot{\mathbf{p}}_2 = \mathbf{a}_2^0-(1-\eta)T\mathbf{e},
+  \qquad \eta=\frac{m_2}{m_1+m_2}.
+\end{equation}
+Consequently, the length error satisfies
+\begin{equation}
+  \ddot e+c\dot e+ke=0,\qquad e=L-L_{\mathrm{ref}},
+\end{equation}
+in the deterministic model, independently of the commanded constant
+$\dot L_{\mathrm{ref}}$. The force can pull or push; it is not clipped to a
+nonnegative tension. Critical damping uses $k=\omega_n^2$ and
+$c=2\omega_n$. The gains and time variable must use consistent units. When an
+ODE is restarted with a new time origin, $L_0$ must be set to the current
+reference length.
+
+The EKF uses the analytic position and velocity Jacobians of these
+accelerations to form $\Fm$ in Eq.~\eqref{eq:lyapunov}. Thus covariance is
+propagated through the same compliant dynamics as the nominal state, rather
+than through the rigid-tether Jacobian. Numerical integration and process
+noise can still produce nonzero length error.
+
+\section{Process Noise for the Tethered State}
+
+The process-noise channels below are additive acceleration perturbations in
+the state equation. Their shapes are unchanged when the spring-damper model is
+selected. They were originally derived for the rigid-tether propagation, so
+their spectral densities and physical interpretation have not yet been
+validated for a compliant tether. In the compliant model, radial noise is
+subsequently acted on by the spring-damper feedback in the deterministic
+dynamics; the steady-state calculation in
+\texttt{tether\_covariance\_effects.tex} is a useful linearized check, not a
+validation of those noise assumptions.
+
 \section{Radial Process Noise with Variable Separation}
 
 Let $\mathbf{d}=\mathbf{p}_2-\mathbf{p}_1$ and
@@ -153,11 +218,11 @@ density $q_T(t)$:
   \mathbb{E}\!\left[\xi_T(t)\xi_T(\tau)\right]
   =q_T(t)\delta(t-\tau).
 \end{equation}
-The deterministic accelerations are first computed from the constrained
-equations, including the correction $\mathbf{q}$ in equation~13 of
-\texttt{derivations/lagrangian\_based.tex}. The stochastic radial
-acceleration is then added to that deterministic result, rather than passed
-through the Lagrange-multiplier constraint solve.
+For the rigid-tether option, the deterministic accelerations include the
+correction $\mathbf{q}$ from the rigid-tether reference derivation. For the
+spring-damper option, they are instead computed from the feedback law above.
+In either case, the stochastic radial acceleration is added to the resulting
+deterministic acceleration as a separate process-noise input.
 
 Use normalized masses $\bar m_1=1-\eta$ and $\bar m_2=\eta$, and interpret
 $\xi_T$ as an equal-and-opposite perturbing force per unit total mass. Its
@@ -180,18 +245,21 @@ acceleration:
   =-\left(\frac{1}{\eta}+\frac{1}{1-\eta}\right)\mathbf{e}\xi_T
   =-\frac{\mathbf{e}}{\eta(1-\eta)}\xi_T.
 \end{equation}
-Consequently, trajectories can depart from the nominal prescribed
-separation; equation~13 supplies the deterministic drift, not a hard
-constraint on each noisy realization.
+Consequently, radial diffusion perturbs the separation. Its subsequent
+evolution depends on the selected deterministic model: the rigid correction
+does not cancel the added noise, while the spring-damper responds to the
+resulting length error.
 
 To place these acceleration perturbations in the EKF state equation, use the
 state ordering
-$\x=[\mathbf{p}_1^\top,\mathbf{p}_2^\top,
-\dot{\mathbf{p}}_1^\top,\dot{\mathbf{p}}_2^\top]^\top$. In the first-order
-state equation, the position derivatives are the velocities, so this
-acceleration noise enters only the velocity-derivative entries. The position
-blocks of the diffusion vector are zero, and its velocity blocks are the
-acceleration coefficients derived above:
+\begin{equation}
+  \x=[\mathbf{p}_1^\top,\mathbf{p}_2^\top,
+      \dot{\mathbf{p}}_1^\top,\dot{\mathbf{p}}_2^\top]^\top.
+\end{equation}
+In the first-order state equation, the position derivatives are the
+velocities, so this acceleration noise enters only the velocity-derivative
+entries. The position blocks of the diffusion vector are zero, and its
+velocity blocks are the acceleration coefficients derived above:
 \begin{equation}
   \Gm_T(\x) =
   \begin{bmatrix}
@@ -207,15 +275,14 @@ The covariance contribution follows by substituting the scalar input
 coefficient $\Gm_T$ and its spectral density $q_T$ into the general process
 noise term $\Gm\Qm\Gm^\top$ in the covariance propagation equation.
 
-This is a nominal-drift-plus-radial-diffusion approximation: equation~13's
-deterministic correction is retained, but it is not re-solved to cancel the
-added noise. It is therefore not the exact fixed-length constrained model;
-use it when stochastic separation variation is intentionally allowed. If a
-physical tether law is required, model the tether length or compliance
-explicitly and derive both drift and noise from that model. Since
-$\mathbf{e}$ depends on the state, the diffusion is state-dependent; an EKF
-evaluates $\Gm_T$ along the nominal trajectory, yielding a local Gaussian
-approximation.
+For the rigid model this is a nominal-drift-plus-radial-diffusion
+approximation: the deterministic constraint correction is not re-solved to
+cancel the added noise, so noisy realizations can depart from the prescribed
+separation. For the compliant model, the spring-damper responds to that
+separation error, but the radial-noise model remains the same unvalidated
+additive channel. Since $\mathbf{e}$ depends on the state, the diffusion is
+state-dependent; an EKF evaluates $\Gm_T$ along the nominal trajectory,
+yielding a local Gaussian approximation.
 
 \section{Transverse Process Noise}
 
@@ -225,8 +292,8 @@ Let
   \mathbf{e}=\frac{\mathbf{d}}{\norm{\mathbf{d}}},\qquad
   \mathbf{P}_\perp=\mathbf{I}_3-\mathbf{e}\mathbf{e}^\top.
 \end{equation}
-The matrix $\mathbf{P}_\perp$ projects onto the plane perpendicular to the
-tether direction. Model an uncertain transverse force per unit total mass
+The matrix $\mathbf{P}_\perp$ selects the plane perpendicular to the tether
+direction. Model an uncertain transverse force per unit total mass
 using a zero-mean white Gaussian vector input $\bm{\xi}_\perp(t)$:
 \begin{equation}
   \mathbb{E}\!\left[
@@ -239,8 +306,9 @@ The equal-and-opposite normalized force perturbations are
   \delta\mathbf{f}_1(t)=\mathbf{P}_\perp\bm{\xi}_\perp(t),\qquad
   \delta\mathbf{f}_2(t)=-\mathbf{P}_\perp\bm{\xi}_\perp(t).
 \end{equation}
-Although the input is written as a three-vector, projection removes its
-component along $\mathbf{e}$, leaving two independent transverse directions.
+Although the input is written as a three-vector, multiplication by
+$\mathbf{P}_\perp$ removes its component along $\mathbf{e}$, leaving two
+independent transverse directions.
 
 Using normalized masses $\bar m_1=1-\eta$ and $\bar m_2=\eta$, divide the
 force perturbations by the respective masses to obtain
@@ -272,17 +340,20 @@ $\x=[\mathbf{p}_1^\top,\mathbf{p}_2^\top,
   \dot{\Pm}=\Fm\Pm+\Pm\Fm^\top
     +\Gm_\perp(q_\perp\mathbf{I}_3)\Gm_\perp^\top.
 \end{equation}
-For this purely transverse input, passing the unconstrained acceleration
-noise through the acceleration map in equation~13 gives the same result:
+For the rigid-tether option, passing the unconstrained acceleration noise
+through the acceleration map in equation~13 gives the same result:
 the map corrects only the relative component parallel to $\mathbf{d}$, and
 $\mathbf{P}_\perp$ has no such component. With an initially constraint-
 consistent state and deterministic drift that enforces the acceleration-
 level constraint, this continuous-time diffusion does not inject noise into
 the fixed-length or radial-velocity constraints. A finite-step numerical
 integrator may nevertheless accumulate constraint error, which should be
-monitored (and, if necessary, controlled with a constraint-consistent
-integrator). Since $\mathbf{P}_\perp$ depends on the state, an EKF evaluates
-$\Gm_\perp$ along the nominal trajectory.
+monitored. These constraint-preservation statements apply to the rigid
+model, not the spring-damper model. With compliant dynamics the same
+transverse acceleration channel is used, but subsequent motion is governed by
+the spring-damper law and is not an exact fixed-length constraint. Since
+$\mathbf{P}_\perp$ depends on the state, an EKF evaluates $\Gm_\perp$ along
+the nominal trajectory.
 
 \section{Sensors}\label{sec:sensors}
 
