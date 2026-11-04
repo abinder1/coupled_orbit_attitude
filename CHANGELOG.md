@@ -18,4 +18,6 @@
   `tetherSpringDamperAccel` also returns Jacobians (`[a, da_dp, da_dv, tension]`),
   and `coa.orbit.tetheredThreeBodyEkfPropagation` accepts an optional
   `spring_damper` struct (`initial_length`, `stiffness`, `damping`) to use it in
-  place of the rigid `tetherAccel`.
+  place of the rigid `tetherAccel`. `examples/tetherCovarianceDemo.m` now
+  compares the two tethers (state, length variance, covariance growth) and
+  checks the spring-damper covariance against a Monte Carlo run.

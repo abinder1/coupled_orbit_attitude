@@ -6,6 +6,11 @@
 %   two-mass tether (bodies 1 and 2) plus a free payload (body 3) in the
 %   Earth-Moon CR3BP. Equations: derivations/ekf_equations.tex.
 %
+%   The tether is the critically damped spring-damper of
+%   coa.orbit.tetherSpringDamperAccel (k = wn^2, c = 2 * wn, wn = spin rate),
+%   which pulls |p2 - p1| toward L(t) = L_0 + Ldot * t. The rigid tether
+%   (coa.orbit.tetherAccel) appears only in two reference checks.
+%
 %   What the script does, in order:
 %     1. Builds an initial tether state with its center of mass (CM) on a halo
 %        orbit, spinning about +z at a fixed length.
@@ -15,11 +20,17 @@
 %        and back-propagate it as a free body to t = 0.
 %     3. Propagates state and covariance together, twice (process noise on and
 %        off), using the packed vector [x; P(:)] (18 + 324 = 342 elements).
-%        P_dot = F*P + P*F' + G*Q*G'  (Eq. 5 of the derivation).
+%        P_dot = F*P + P*F' + G*Q*G'  (Eq. 5 of the derivation), with F from
+%        the analytic spring-damper Jacobian.
 %     4. Re-propagates the state alone (18-element mode, no covariance) for
 %        the point-mass visualization.
 %     5. Sweeps the two tether process noises separately from zero initial P
 %        (Figure 4).
+%     6. Starts the tether with a broken length constraint to show the
+%        spring-damper recovering it in both the state and P, with two checks
+%        against the rigid tether.
+%     7. Checks the linearized covariance, including the length variance,
+%        against a Monte Carlo run of the nonlinear dynamics.
 %
 %   Figures:
 %     1. 'Uncertainty growth'  - 1-sigma position / velocity per body vs time,
@@ -28,11 +39,18 @@
 %        and payload, and the three bodies relative to the tether CM.
 %     3. 'Final correlation'   - correlation matrix of P at the final time
 %        (process noise on).
-%     4. 'Axial vs transverse noise' - check that tension_psd drives only the
-%        along-tether direction and transverse_psd only the perpendicular
-%        ones: sweeps both PSDs from zero initial P over a ~2 min span and
-%        plots the relative-velocity 1-sigma split into axial and
-%        perpendicular parts, against the analytic prediction (dashed).
+%     4. 'Axial vs transverse noise' - sweeps both PSDs from zero initial P
+%        over a ~2 min span and plots the relative-velocity 1-sigma split into
+%        axial and perpendicular parts. The dashed prediction is the
+%        rigid-tether result; the spring-damper's damper bleeds axial noise,
+%        so a gap in the axial panel is expected.
+%     5. 'Spring-damper constraint recovery' - length error, length-rate error,
+%        and the length 1-sigma implied by P from a broken start (check 1,
+%        rigid in gray), plus the state difference from the rigid tether
+%        when starting on the constraint (check 2).
+%     6. 'Linear covariance vs Monte Carlo' - linearized P against the sample
+%        covariance of 100 nonlinear state-only runs, per body and for the
+%        tether length.
 %
 %   State convention (nondimensional, CR3BP rotating frame, x-y-z axes):
 %     x = [p1; p2; p3; v1; v2; v3]   (each pK, vK is 3x1)
@@ -81,8 +99,8 @@ prop_hours = 24;
 t_end = prop_hours * 3600 / T_star;  % Nondimensional
 
 % Initial 1-sigma uncertainties, applied independently to every body
-initial_position_sigma_km = 0.01;
-initial_velocity_sigma_ms = 1e-4;
+initial_position_sigma_km = 100;
+initial_velocity_sigma_ms = 1;
 
 % Process-noise spectral densities (nondimensional), see the propagator header:
 %   tension_psd             radial (tension) noise on the tether, Eq. 20
@@ -98,6 +116,15 @@ accel_fn = @(state) coa.orbit.cr3bp(state, mu);
 
 % Short alias for the propagator (keeps the ODE wrappers within 88 columns)
 propagate = @coa.orbit.tetheredThreeBodyEkfPropagation;
+
+% Critically damped spring-damper tether, k = wn^2 and c = 2 * wn, with wn
+% equal to the spin rate. The length reference is
+% L(t) = L_0 + tether_length_rate * t, with t measured from the start.
+natural_frequency = spin_rate * T_star;
+spring_damper = struct('initial_length', tether_length_km / L_star, ...
+                       'stiffness', natural_frequency^2, ...
+                       'damping', 2 * natural_frequency);
+rigid_model = struct();  % An empty struct selects the rigid tether
 
 %% Initial state
 % Tether bodies 1 and 2 at t = 0. Layout: [p1; p2; v1; v2] (12x1).
@@ -116,7 +143,8 @@ terminals_state = tetherInitialState(halo_ic, ...
 % placeholder copy of the catch mechanism. It does not influence bodies 1 and
 % 2 and is discarded.
 tether_only_rhs = @(t, state) propagate(t, state, mass_2_fraction, ...
-                                        tether_length_rate, accel_fn);
+                                        tether_length_rate, accel_fn, ...
+                                        struct(), spring_damper);
 tether_only_state_0 = [terminals_state(1:6); terminals_state(4:6); ...
                        terminals_state(7:12); terminals_state(10:12)];
 tether_only_sol = ode113(tether_only_rhs, [0, t_end], tether_only_state_0, ...
@@ -157,7 +185,7 @@ results = struct('name', {"Process noise on", "Process noise off"}, ...
 for k = 1:numel(results)
     rhs = @(t, packed_state) propagate(t, packed_state, mass_2_fraction, ...
                                        tether_length_rate, accel_fn, ...
-                                       results(k).noise);
+                                       results(k).noise, spring_damper);
 
     timer = tic;
     sol = ode113(rhs, [0, t_end], [initial_state; initial_covariance(:)], ...
@@ -230,6 +258,7 @@ for panel = 1:2
         title('Velocity uncertainty');
     end
 end
+sgtitle('Spring-damper tether, 1\sigma per body (solid: noise on, dashed: off)');
 
 %% Figure 2: point-mass visualization (state-only propagation)
 % An 18-element packed state selects state-only mode (no covariance, no
@@ -237,7 +266,8 @@ end
 % is carried.
 t_plot = linspace(0, t_end, 1500);
 state_rhs = @(t, state) propagate(t, state, mass_2_fraction, ...
-                                  tether_length_rate, accel_fn);
+                                  tether_length_rate, accel_fn, struct(), ...
+                                  spring_damper);
 state_sol = ode113(state_rhs, [0, t_end], initial_state, ...
                    odeset('RelTol', 1e-10, 'AbsTol', 1e-12));
 states = deval(state_sol, t_plot);
@@ -270,7 +300,7 @@ xlabel('x [km]');
 ylabel('y [km]');
 zlabel('z [km]');
 title('Rotating-frame trajectories');
-legend('Location', 'best');
+legend('Location', 'northwest');
 
 % Right: bodies relative to the tether CM, with tether snapshots
 nexttile;
@@ -303,7 +333,7 @@ xlabel('\Deltax [km]');
 ylabel('\Deltay [km]');
 zlabel('\Deltaz [km]');
 title('Relative to tether CM (snapshots)');
-legend('Location', 'best');
+legend('Location', 'southwest');
 
 %% Figure 3: final correlation matrix
 % corr_ij = P_ij / sqrt(P_ii * P_jj), process-noise-on run. Axis blocks are
@@ -314,8 +344,11 @@ correlation = final_covariance ./ sqrt(diag(final_covariance) * ...
 figure('Name', 'Final correlation', 'Color', 'w');
 imagesc(correlation, [-1, 1]);
 axis('image');
-colorbar;
+colorbar_handle = colorbar;
+colorbar_handle.Label.String = 'Correlation coefficient';
 colormap(parula);
+xlabel('State block (3 components each)');
+ylabel('State block (3 components each)');
 labels = ["p1", "p2", "p3", "v1", "v2", "v3"];
 set(gca, 'XTick', 2:3:18, 'XTickLabel', labels, ...
     'YTick', 2:3:18, 'YTickLabel', labels);
@@ -361,7 +394,7 @@ for c = 1:n_cases
                          'body_3_acceleration_psd', 0);
     rhs = @(t, packed_state) propagate(t, packed_state, mass_2_fraction, ...
                                        tether_length_rate, accel_fn, ...
-                                       sweep_noise);
+                                       sweep_noise, spring_damper);
     sol = ode113(rhs, [0, sweep_end], [initial_state; zeros(324, 1)], ...
                  sweep_ode_opts);
     packed = deval(sol, sweep_times);
@@ -379,7 +412,7 @@ for c = 1:n_cases
         perp_sigma(c, k) = sqrt(max(trace(relative_velocity_cov) - ...
                                     axial_variance, 0));
     end
-    case_labels(c) = sprintf('q_T = %g, q_\\perp = %g (x base)', ...
+    case_labels(c) = sprintf('q_{axial} = %g, q_{perp} = %g (x 1e-8)', ...
                              sweep_cases(c, 1), sweep_cases(c, 2));
 end
 
@@ -396,7 +429,7 @@ for panel = 1:2
     hold('on');
     for c = 1:n_cases
         plot(sweep_minutes, panel_data{panel}(c, :) * velocity_scale, ...
-             'Color', case_colors(c, :), 'LineWidth', 1.5, ...
+             'Color', case_colors(c, :), 'LineWidth', 4 - 0.7 * (c - 1), ...
              'DisplayName', case_labels(c));
         if panel == 1
             predicted_variance = sweep_cases(c, 1) * base_psd * gain^2 * ...
@@ -414,12 +447,269 @@ for panel = 1:2
     ylabel('Relative velocity 1\sigma [m/s]');
     title(panel_titles(panel));
     if panel == 1
+        plot(NaN, NaN, 'k--', 'DisplayName', 'rigid-tether prediction');
         legend('Location', 'southeast', 'FontSize', 7);
     end
 end
-sgtitle('Process-noise decomposition (zero initial P; dashed = prediction)');
+sgtitle(['Process-noise decomposition, spring-damper tether (zero initial P; ' ...
+         'dashed = rigid-tether prediction)']);
+
+%% Constraint recovery and rigid-tether reference checks
+% The spring-damper tether is the model above. Here it is started with a
+% broken constraint (extra length and length rate relative to L(t)) and
+% compared with the rigid tether (tetherAccel) in two ways:
+%   Check 1 (broken start): the rigid tether keeps the length error forever,
+%     and P keeps the length variance, while the spring-damper removes both.
+%   Check 2 (on-constraint start): with the constraint already satisfied the
+%     two models should give nearly the same state.
+broken_length_error_km = 1;
+broken_rate_error_ms = 0.01;
+
+broken_rate_nd = tether_length_rate + broken_rate_error_ms / 1000 * T_star / L_star;
+broken_terminals = tetherInitialState(halo_ic, ...
+                                      (tether_length_km + ...
+                                       broken_length_error_km) / L_star, ...
+                                      mass_2_fraction, spin_rate * T_star, ...
+                                      broken_rate_nd, lhat_0);
+broken_state = [broken_terminals(1:6); initial_state(7:9); ...
+                broken_terminals(7:12); initial_state(16:18)];
+
+tether_runs = struct('name', {"Spring-damper", "Spring-damper, broken start", ...
+                              "Rigid", "Rigid, broken start"}, ...
+                     'state', {initial_state, broken_state, ...
+                               initial_state, broken_state}, ...
+                     'model', {spring_damper, spring_damper, ...
+                               rigid_model, rigid_model});
+for k = 1:numel(tether_runs)
+    run_args = {mass_2_fraction, tether_length_rate, accel_fn, ...
+                process_noise, tether_runs(k).model};
+    timer = tic;
+    packed = propagatePacked(tether_runs(k).state, initial_covariance, ...
+                             t_end, t_eval, run_args, ode_opts);
+    tether_runs(k).elapsed_s = toc(timer);
+    tether_runs(k).packed = packed;
+    reference_length = spring_damper.initial_length + tether_length_rate * t_eval;
+    tether_runs(k).history = lengthHistory(packed, reference_length, ...
+                                           tether_length_rate, ode_opts.RelTol);
+end
+
+fprintf('\nSpring-damper (wn = %.3g * spin rate) vs rigid, process noise on\n', ...
+        natural_frequency / (spin_rate * T_star));
+for k = 1:numel(tether_runs)
+    final_covariance = reshape(tether_runs(k).packed(19:end, end), [18, 18]);
+    eigenvalues = eig((final_covariance + final_covariance') / 2);
+    history = tether_runs(k).history;
+    fprintf(['  %-28s %5.2f s, min/max eig(P) = %+.1e, final L error = ' ...
+             '%+.3g m, final L sigma = %.3g m\n'], ...
+            tether_runs(k).name, tether_runs(k).elapsed_s, ...
+            min(eigenvalues) / max(eigenvalues), ...
+            history.length_error(end) * L_star * 1000, ...
+            history.length_sigma(end) * L_star * 1000);
+end
+
+% Check 2: on the constraint, the two tethers should agree closely.
+state_difference = tether_runs(1).packed(1:18, :) - tether_runs(3).packed(1:18, :);
+fprintf('  Check 2, max |state(SD) - state(rigid)|: %.3g km, %.3g m/s\n', ...
+        max(abs(state_difference(1:9, :)), [], 'all') * L_star, ...
+        max(abs(state_difference(10:18, :)), [], 'all') * velocity_scale);
+
+gray = [0.5, 0.5, 0.5];
+run_colors = [0.000, 0.447, 0.698; 0.835, 0.369, 0.000; gray; gray];
+run_styles = ["-", "-", "-", "--"];
+length_scale_m = L_star * 1000;
+
+%% Figure 5: constraint recovery
+figure('Name', 'Spring-damper constraint recovery', 'Color', 'w');
+tiledlayout(2, 2, 'TileSpacing', 'compact');
+panels = ["length_error", "rate_error", "length_sigma"];
+panel_titles = ["Length error L - L_{ref}", "Length-rate error", ...
+                "Length 1\sigma from P"];
+panel_labels = ["[m]", "[m/s]", "[m]"];
+panel_scales = [length_scale_m, velocity_scale, length_scale_m];
+for panel = 1:3
+    nexttile;
+    hold('on');
+    for k = 1:numel(tether_runs)
+        values = abs(tether_runs(k).history.(panels(panel))) * panel_scales(panel);
+        semilogy(t_hours, max(values, 1e-12), 'Color', run_colors(k, :), ...
+                 'LineStyle', run_styles(k), 'LineWidth', 1.5, ...
+                 'DisplayName', tether_runs(k).name);
+    end
+    set(gca, 'YScale', 'log');
+    grid('on');
+    xlabel('Time [h]');
+    ylabel("|" + panel_titles(panel) + "| " + panel_labels(panel));
+    title(panel_titles(panel));
+    if panel == 3
+        floor_sigma = tether_runs(1).history.length_sigma_floor * length_scale_m;
+        floor_line = plot(t_hours, floor_sigma, 'k:', 'LineWidth', 1.5, ...
+                          'DisplayName', 'P integration-error floor');
+        legend(floor_line, 'Location', 'southeast', 'FontSize', 7);
+    end
+    if panel == 1
+        run_legend = legend('FontSize', 8, 'NumColumns', 4);
+        run_legend.Layout.Tile = 'south';
+    end
+end
+nexttile;
+hold('on');
+for body = 1:3
+    rows = 3 * (body - 1) + (1:3);
+    plot(t_hours, vecnorm(state_difference(rows, :)) * L_star, ...
+         'Color', body_colors(body, :), 'LineWidth', line_widths(body), ...
+         'DisplayName', body_names(body));
+end
+set(gca, 'YScale', 'log');
+grid('on');
+xlabel('Time [h]');
+ylabel('Position difference [km]');
+title('Check 2: |p_{SD} - p_{rigid}|, on-constraint start');
+legend('Location', 'northwest', 'FontSize', 7);
+sgtitle(['Check 1 (panels 1-3, process noise on): spring-damper (color) vs ' ...
+         'rigid (gray); check 2 (panel 4)']);
+
+%% Figure 6: linear covariance vs Monte Carlo (spring-damper, no process noise)
+% The sampled states are propagated state-only through the nonlinear
+% spring-damper dynamics. Agreement with the linearized P supports the
+% spring-damper Jacobian over this span.
+monte_carlo_count = 100;
+monte_carlo_times = linspace(0, t_end, 25);
+linear_args = {mass_2_fraction, tether_length_rate, accel_fn, ...
+               no_process_noise, spring_damper};
+linear_packed = propagatePacked(initial_state, initial_covariance, t_end, ...
+                                monte_carlo_times, linear_args, ode_opts);
+
+rng(1);
+sigma_vector = sqrt(diag(initial_covariance));
+samples = zeros(monte_carlo_count, 18, numel(monte_carlo_times));
+sample_args = {mass_2_fraction, tether_length_rate, accel_fn, struct(), ...
+               spring_damper};
+fprintf('\nMonte Carlo check (%d samples)...\n', monte_carlo_count);
+for n = 1:monte_carlo_count
+    sample_state = initial_state + sigma_vector .* randn(18, 1);
+    sample_rhs = @(t, state) propagate(t, state, sample_args{:});
+    sample_sol = ode113(sample_rhs, [0, t_end], sample_state, ...
+                        odeset('RelTol', 1e-10, 'AbsTol', 1e-12));
+    samples(n, :, :) = deval(sample_sol, monte_carlo_times);
+end
+
+figure('Name', 'Linear covariance vs Monte Carlo', 'Color', 'w');
+tiledlayout(1, 3, 'TileSpacing', 'compact');
+monte_carlo_hours = monte_carlo_times * T_star / 3600;
+quantity_names = ["position", "velocity"];
+for panel = 1:2
+    nexttile;
+    hold('on');
+    for body = 1:3
+        if panel == 1
+            rows = 3 * (body - 1) + (1:3);
+            scale = L_star;
+        else
+            rows = 9 + 3 * (body - 1) + (1:3);
+            scale = velocity_scale;
+        end
+        linear_sigma = blockSigma(linear_packed, rows) * scale;
+        sample_sigma = zeros(1, numel(monte_carlo_times));
+        for k = 1:numel(monte_carlo_times)
+            sample_covariance = cov(samples(:, rows, k));
+            sample_sigma(k) = sqrt(trace(sample_covariance)) * scale;
+        end
+        plot(monte_carlo_hours, linear_sigma, '-', ...
+             'Color', body_colors(body, :), 'LineWidth', line_widths(body), ...
+             'DisplayName', body_names(body) + " - linear P");
+        plot(monte_carlo_hours, sample_sigma, 'o', ...
+             'Color', body_colors(body, :), 'MarkerSize', 4 + 4 * (body == 1), ...
+             'DisplayName', body_names(body) + " - Monte Carlo");
+        fprintf('  %-20s %-8s final sigma ratio (MC / linear) = %.3f\n', ...
+                body_names(body), quantity_names(panel), ...
+                sample_sigma(end) / linear_sigma(end));
+    end
+    set(gca, 'YScale', 'log');
+    grid('on');
+    xlabel('Time [h]');
+    if panel == 1
+        ylabel('Position 1\sigma, sqrt(tr P_{pp}) [km]');
+        title('Position uncertainty');
+        y_limits = ylim;
+        ylim([y_limits(1), y_limits(2) * 100]);
+        legend('Location', 'northwest', 'FontSize', 7);
+    else
+        ylabel('Velocity 1\sigma, sqrt(tr P_{vv}) [m/s]');
+        title('Velocity uncertainty');
+    end
+end
+sgtitle(['Spring-damper tether (no process noise): linear covariance ' ...
+         '(lines) vs Monte Carlo (markers)']);
+
+% Third panel: length 1-sigma, the quantity the spring-damper is meant to
+% hold down. The linear value comes from P, the sample value from |p2 - p1|.
+nexttile;
+hold('on');
+dense_packed = propagatePacked(initial_state, initial_covariance, t_end, ...
+                               t_eval, linear_args, ode_opts);
+dense_history = lengthHistory(dense_packed, zeros(size(t_eval)), 0, ...
+                              ode_opts.RelTol);
+linear_history = lengthHistory(linear_packed, zeros(size(monte_carlo_times)), ...
+                               0, ode_opts.RelTol);
+sample_length = squeeze(vecnorm(samples(:, 4:6, :) - samples(:, 1:3, :), 2, 2));
+plot(t_hours, dense_history.length_sigma * length_scale_m, '-', ...
+     'LineWidth', 1.5, 'DisplayName', 'linear P');
+plot(t_hours, dense_history.length_sigma_floor * length_scale_m, 'k:', ...
+     'LineWidth', 1.5, 'DisplayName', 'P integration-error floor');
+plot(monte_carlo_hours, std(sample_length, 0, 1) * length_scale_m, 'o', ...
+     'MarkerSize', 4, 'DisplayName', 'Monte Carlo');
+% Below the floor the linear value is integration error, not signal. The
+% Monte Carlo spread (state-only runs at tighter tolerance) shows the true
+% length spread has collapsed to ~1e-6 m.
+fprintf('  Length (t = %.2f h)   sigma ratio (MC / linear) = %.3f\n', ...
+        monte_carlo_hours(2), ...
+        std(sample_length(:, 2)) / linear_history.length_sigma(2));
+set(gca, 'YScale', 'log');
+grid('on');
+xlabel('Time [h]');
+ylabel('Tether length 1\sigma [m]');
+title('Tether length uncertainty');
+legend('Location', 'northeast', 'FontSize', 7);
 
 %% Local functions
+function packed = propagatePacked(state_0, covariance_0, t_end, t_eval, args, ...
+                                  ode_opts)
+    % Propagate [state; P(:)] with the EKF propagator and sample at t_eval.
+    % args are the propagator inputs after packed_state.
+    propagator = @coa.orbit.tetheredThreeBodyEkfPropagation;
+    rhs = @(t, packed_state) propagator(t, packed_state, args{:});
+    sol = ode113(rhs, [0, t_end], [state_0; covariance_0(:)], ode_opts);
+    packed = deval(sol, t_eval);
+end
+
+function history = lengthHistory(packed, reference_length, length_rate, rel_tol)
+    % Length error, length-rate error, and the length 1-sigma implied by P.
+    % rel_tol is the ODE RelTol used to propagate P; it sets the noise floor.
+    n_times = size(packed, 2);
+    history.length_error = zeros(1, n_times);
+    history.rate_error = zeros(1, n_times);
+    history.length_sigma = zeros(1, n_times);
+    % The quadratic form g' * P * g subtracts large unconstrained directions
+    % of P, so once the length variance has decayed below roughly
+    % rel_tol * norm(P) it is integration error (and can be negative), not
+    % signal.
+    history.length_sigma_floor = zeros(1, n_times);
+    for k = 1:n_times
+        separation = packed(4:6, k) - packed(1:3, k);
+        separation_rate = packed(13:15, k) - packed(10:12, k);
+        length_value = norm(separation);
+        direction = separation / length_value;
+        history.length_error(k) = length_value - reference_length(k);
+        history.rate_error(k) = dot(direction, separation_rate) - length_rate;
+        covariance = reshape(packed(19:end, k), [18, 18]);
+        gradient = [-direction; direction];
+        position_covariance = covariance(1:6, 1:6);
+        history.length_sigma(k) = ...
+            sqrt(abs(gradient' * position_covariance * gradient));
+        history.length_sigma_floor(k) = sqrt(rel_tol * norm(position_covariance));
+    end
+end
+
 function sigma = blockSigma(packed, rows)
     % sqrt(trace) of the sub-block of P over the given state rows, per column.
     n_times = size(packed, 2);
