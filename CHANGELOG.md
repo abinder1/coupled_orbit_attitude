@@ -24,4 +24,4 @@
   uses the spring-damper tether with a COM/relative initial covariance
   (`coa.filter.tetherInitialCovariance`), checks it against the rigid tether,
   and compares the linear covariance (including spin phase) with a Monte Carlo
-  run.
+  run, for zero and nonzero (reel in/out) length rates.

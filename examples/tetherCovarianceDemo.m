@@ -30,7 +30,10 @@
 %        spring-damper recovering it in both the state and P, with two checks
 %        against the rigid tether.
 %     7. Checks the linearized covariance, including the length variance,
-%        against a Monte Carlo run of the nonlinear dynamics.
+%        against a Monte Carlo run of the nonlinear dynamics at zero length
+%        rate.
+%     8. Repeats the covariance/Monte Carlo check while reeling in and out
+%        at nonzero length rates.
 %
 %   Figures:
 %     1. 'Uncertainty growth'  - 1-sigma position / velocity per body vs time,
@@ -51,6 +54,8 @@
 %     6. 'Linear covariance vs Monte Carlo' - linearized P against the sample
 %        covariance of 100 nonlinear state-only runs, per body and for the
 %        tether length.
+%     7. 'Nonzero length rate' - linearized P against Monte Carlo for reel-in
+%        and reel-out cases, with nominal length and rate tracking.
 %
 %   State convention (nondimensional, CR3BP rotating frame, x-y-z axes):
 %     x = [p1; p2; p3; v1; v2; v3]   (each pK, vK is 3x1)
@@ -96,7 +101,7 @@ lhat_0 = [1; 0; 0];              % Initial unit vector from the CM toward body 1
 halo_ic = [0.831987145310294; 0; 0.12575552414079; 0; 0.239887839725451; 0];
 
 % Propagation span (kept short; sensitivity of these dynamics is large)
-prop_hours = 5 * 24;
+prop_hours = 3 * 24;
 t_end = prop_hours * 3600 / T_star;  % Nondimensional
 
 % Initial 1-sigma uncertainties. The tether pair is described by its center of
@@ -708,6 +713,114 @@ xlabel('Time [h]');
 ylabel('Tether length 1\sigma [m]');
 title('Tether length uncertainty');
 legend('Location', 'northeast', 'FontSize', 7);
+
+%% Figure 7: nonzero length rate, linear covariance vs Monte Carlo
+% Repeats the Monte Carlo check with the tether reeling in and out. The
+% reference length is L(t) = L_0 + Ldot * t, so the Jacobian and the
+% covariance propagation are exercised with a nonzero length-rate command.
+% The same initial covariance, payload, and random draws are used for each rate.
+reel_rates_ms = [-0.5, 0.5];
+reel_colors = [0.835, 0.369, 0.000; 0.000, 0.447, 0.698];
+reel_count = 100;
+rng(2);
+reel_draws = randn(18, reel_count);
+reel_times = linspace(0, t_end, 25);
+reel_hours = reel_times * T_star / 3600;
+
+figure('Name', 'Nonzero length rate', 'Color', 'w');
+tiledlayout(1, 3, 'TileSpacing', 'compact');
+reel_axes = [nexttile, nexttile, nexttile];
+hold(reel_axes(1), 'on');
+hold(reel_axes(2), 'on');
+hold(reel_axes(3), 'on');
+fprintf('\nNonzero length rate (%d samples each)\n', reel_count);
+for r = 1:numel(reel_rates_ms)
+    reel_rate_nd = reel_rates_ms(r) / 1000 * T_star / L_star;
+    reel_terminals = tetherInitialState(halo_ic, tether_length_km / L_star, ...
+                                        mass_2_fraction, spin_rate * T_star, ...
+                                        reel_rate_nd, lhat_0);
+    reel_state = [reel_terminals(1:6); initial_state(7:9); ...
+                  reel_terminals(7:12); initial_state(16:18)];
+    reel_args = {mass_2_fraction, reel_rate_nd, accel_fn, no_process_noise, ...
+                 spring_damper};
+    reel_packed = propagatePacked(reel_state, initial_covariance, t_end, ...
+                                  reel_times, reel_args, ode_opts);
+
+    reel_samples = zeros(reel_count, 18, numel(reel_times));
+    reel_sample_args = {mass_2_fraction, reel_rate_nd, accel_fn, struct(), ...
+                        spring_damper};
+    for n = 1:reel_count
+        sample_rhs = @(t, state) propagate(t, state, reel_sample_args{:});
+        sample_sol = ode113(sample_rhs, [0, t_end], ...
+                            reel_state + initial_factor * reel_draws(:, n), ...
+                            odeset('RelTol', 1e-10, 'AbsTol', 1e-12));
+        reel_samples(n, :, :) = deval(sample_sol, reel_times);
+    end
+
+    reference_length = spring_damper.initial_length + reel_rate_nd * reel_times;
+    reel_history = lengthHistory(reel_packed, reference_length, reel_rate_nd, ...
+                                 ode_opts.RelTol);
+    reel_name = sprintf('Ldot = %+.1f m/s', reel_rates_ms(r));
+
+    for panel = 1:2
+        if panel == 1
+            rows = 1:3;
+            scale = L_star;
+        else
+            rows = 10:12;
+            scale = velocity_scale;
+        end
+        linear_sigma = blockSigma(reel_packed, rows) * scale;
+        sample_sigma = zeros(1, numel(reel_times));
+        for k = 1:numel(reel_times)
+            sample_sigma(k) = sqrt(trace(cov(reel_samples(:, rows, k)))) * scale;
+        end
+        plot(reel_axes(panel), reel_hours, linear_sigma, '-', ...
+             'Color', reel_colors(r, :), 'LineWidth', 1.5, ...
+             'DisplayName', reel_name + " - linear P");
+        plot(reel_axes(panel), reel_hours, sample_sigma, 'o', ...
+             'Color', reel_colors(r, :), 'MarkerSize', 4, ...
+             'DisplayName', reel_name + " - Monte Carlo");
+        fprintf('  %s  body 1 %-8s final sigma ratio (MC / linear) = %.3f\n', ...
+                reel_name, quantity_names(panel), ...
+                sample_sigma(end) / linear_sigma(end));
+    end
+    rows = 7:9;
+    payload_linear = blockSigma(reel_packed, rows);
+    payload_sample = sqrt(trace(cov(reel_samples(:, rows, end))));
+    fprintf('  %s  payload position final sigma ratio = %.3f\n', reel_name, ...
+            payload_sample / payload_linear(end));
+
+    plot(reel_axes(3), reel_hours, ...
+         max(abs(reel_history.length_error) * length_scale_m, 1e-12), '-', ...
+         'Color', reel_colors(r, :), 'LineWidth', 1.5, ...
+         'DisplayName', reel_name + " - |L - L_{ref}| [m]");
+    plot(reel_axes(3), reel_hours, ...
+         max(abs(reel_history.rate_error) * velocity_scale, 1e-12), '--', ...
+         'Color', reel_colors(r, :), 'LineWidth', 1.5, ...
+         'DisplayName', reel_name + " - |dL/dt - Ldot| [m/s]");
+    fprintf('  %s  final length %.3f km (reference %.3f km), error %.2g m\n', ...
+            reel_name, norm(reel_packed(4:6, end) - reel_packed(1:3, end)) * ...
+            L_star, reference_length(end) * L_star, ...
+            reel_history.length_error(end) * length_scale_m);
+end
+for panel = 1:3
+    set(reel_axes(panel), 'YScale', 'log');
+    grid(reel_axes(panel), 'on');
+    xlabel(reel_axes(panel), 'Time [h]');
+end
+legend(reel_axes(1), 'Location', 'northwest', 'FontSize', 7);
+legend(reel_axes(2), 'Location', 'southeast', 'FontSize', 7);
+ylim(reel_axes(3), [1e-12, 1e-2]);
+legend(reel_axes(3), 'Location', 'northeast', 'FontSize', 7);
+ylabel(reel_axes(1), 'Counterweight position 1\sigma [km]');
+title(reel_axes(1), 'Position uncertainty');
+ylabel(reel_axes(2), 'Counterweight velocity 1\sigma [m/s]');
+title(reel_axes(2), 'Velocity uncertainty');
+ylabel(reel_axes(3), 'Error [m] or [m/s]');
+title(reel_axes(3), 'Constraint tracking (nominal state)');
+sgtitle(['Reeling tether (no process noise): linear covariance (lines) vs ' ...
+         'Monte Carlo (markers)']);
 
 %% Local functions
 function packed = propagatePacked(state_0, covariance_0, t_end, t_eval, args, ...
