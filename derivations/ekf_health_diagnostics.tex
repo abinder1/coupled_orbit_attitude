@@ -236,6 +236,30 @@ filter may be warranted.
 Run an iterated EKF or an unscented Kalman filter on the same data. Meaningful divergence
 between their estimates indicates that linearization error is material for the problem.
 
+\subsection{Iterated measurement update}
+\label{sec:iekf}
+When $\Hm$ varies appreciably over the prior uncertainty, relinearize the update about the
+latest iterate $\bm{\eta}_i$, starting at $\bm{\eta}_1=\bar{\x}$ (Gauss--Newton on the
+MAP cost):
+\begin{align}
+  \bm{\nu}_i &= \bm{z} - h(\bm{\eta}_i) - \Hm_i(\bar{\x} - \bm{\eta}_i), \\
+  \Sm_i &= \Hm_i\Pm^-\Hm_i\T + \Rm, \qquad
+  \Km_i = \Pm^-\Hm_i\T\Sm_i^{-1}, \\
+  \bm{\eta}_{i+1} &= \bar{\x} + \Km_i\bm{\nu}_i .
+\end{align}
+Iteration stops when
+$(\bm{\eta}_{i+1}-\bm{\eta}_i)\T(\Pm^-)^{-1}(\bm{\eta}_{i+1}-\bm{\eta}_i)<10^{-6}$ or at
+a maximum count. The posterior mean is the last iterate, and the Joseph-form covariance
+uses the final $\Hm$ and $\Km$.
+
+The health statistics keep their definitions at the prior. The NIS uses the first-pass
+$\bm{\nu}_1$ and $\Sm_1$, which are the innovation and covariance about $\bar{\x}$, so it
+remains $\chi^2_m$ for a consistent filter, while the NEES uses the final posterior. In
+the tethered three-body demo, a single linearization of the payload--catch-mechanism
+crosslink range over a 20\,km position uncertainty at 7500\,km separation leaves a
+linearization error of about $200\sigma$ in that row; this alone drove the first-update
+ANEES to $\sim\!10^3$ times its expected value, and five iterations restore it to $\sim\!1$.
+
 %======================================================================
 \section{Observability and Information}
 \label{sec:observability}
