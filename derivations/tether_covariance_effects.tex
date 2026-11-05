@@ -37,7 +37,7 @@ is propagated with the analytic Jacobian of the same spring-damper dynamics:
   \label{eq:pdot}
 \end{equation}
 where $\Qm=\Gm\mathbf{Q}\Gm^\top$ is the modeled process-noise contribution.
-The current demo uses a 72-hour span and a structured COM/relative initial
+The current demo uses a 24-hour span and a structured COM/relative initial
 covariance. Its tether-pair $1\sigma$ values are 100~km in COM position,
 1~m/s in COM velocity, 10~m in relative position, and 1~m/s in relative
 velocity; the independent payload uses 100~km and 1~m/s. The run exercises:
@@ -146,7 +146,7 @@ the figures. Three observations follow.
     covariance matrix.
 \end{itemize}
 
-\subsection{The Figure 5 level is real: steady-state variance with process noise}
+\subsection{Steady-state variance with process noise (Figure 8)}
 
 With process noise on, the length variance does not go to zero. Axial
 noise enters the length equation as a white acceleration of PSD
@@ -163,15 +163,17 @@ The stationary variance of this linear oscillator is
 \end{equation}
 With $\eta = 1/2$ ($g_a = 4$), $q = 10^{-8}$, $\zeta = 1$, and
 $\omega_n = \Omega T^{\star} = 714$ (nondimensional), Eq.~\eqref{eq:steady}
-gives $\sigma_e = 1.05\times10^{-8}\,L^{\star} \approx 4.05$~m. The script
-prints a final length $1\sigma$ of $3.61$~m in the current 72-hour run. The
-simple stationary-oscillator estimate is therefore the right scale, but is
-not an exact match. The existing process-noise channels were derived for the
-rigid-tether model and have not been independently validated for the compliant
-tether; the estimate is a useful diagnostic, not proof that the PSD model is
-physically calibrated. At late times the heuristic floor in
-Eq.~\eqref{eq:floor} can also rise above the physical signal, in which case
-the plotted covariance-derived length uncertainty is not reliable.
+gives $\sigma_e^2 = 1.11\times10^{-16}(L^{\star})^2$, or
+$\sigma_e \approx 4.05$~m. Figure~8 compares this rule across a sweep of
+tension-noise PSDs against the final length variance projected from the
+numerically propagated full covariance. Each sweep run starts with zero
+covariance, applies tension noise alone, and runs for 20 damping time
+constants. The figure also shows the heuristic integration-error floor from
+Eq.~\eqref{eq:floor}; values near or below it should not be interpreted as
+physical variance. The stationary-oscillator result is a diagnostic rather
+than proof that the process-noise PSD is physically calibrated: the existing
+process-noise channels were derived for the rigid-tether model and have not
+been independently validated for the compliant tether.
 
 \section{Effect 2: linear covariance versus Monte Carlo}
 

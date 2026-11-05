@@ -34,6 +34,8 @@
 %        rate.
 %     8. Repeats the covariance/Monte Carlo check while reeling in and out
 %        at nonzero length rates.
+%     9. Sweeps tension process noise and compares steady-state tether length
+%        variance with the stationary-oscillator prediction.
 %
 %   Figures:
 %     1. 'Uncertainty growth'  - 1-sigma position / velocity per body vs time,
@@ -56,6 +58,8 @@
 %        tether length.
 %     7. 'Nonzero length rate' - linearized P against Monte Carlo for reel-in
 %        and reel-out cases, with nominal length and rate tracking.
+%     8. 'Steady-state length covariance' - tension-noise sweep, full
+%        covariance propagation vs the stationary-oscillator prediction.
 %
 %   State convention (nondimensional, CR3BP rotating frame, x-y-z axes):
 %     x = [p1; p2; p3; v1; v2; v3]   (each pK, vK is 3x1)
@@ -101,7 +105,7 @@ lhat_0 = [1; 0; 0];              % Initial unit vector from the CM toward body 1
 halo_ic = [0.831987145310294; 0; 0.12575552414079; 0; 0.239887839725451; 0];
 
 % Propagation span (kept short; sensitivity of these dynamics is large)
-prop_hours = 3 * 24;
+prop_hours = 1 * 24;
 t_end = prop_hours * 3600 / T_star;  % Nondimensional
 
 % Initial 1-sigma uncertainties. The tether pair is described by its center of
@@ -821,6 +825,75 @@ ylabel(reel_axes(3), 'Error [m] or [m/s]');
 title(reel_axes(3), 'Constraint tracking (nominal state)');
 sgtitle(['Reeling tether (no process noise): linear covariance (lines) vs ' ...
          'Monte Carlo (markers)']);
+
+%% Figure 8: steady-state length covariance vs tension process noise
+% Start from zero covariance and inject tension noise only. The settling span
+% is 20 damping time constants, so the transient from P(0) = 0 is negligible.
+% The full Cartesian covariance is projected onto the instantaneous length
+% direction and compared with the stationary one-dimensional oscillator rule.
+tension_psd_sweep = base_psd * 10.^(-2:2);
+steady_duration = 20 / natural_frequency;
+steady_covariance_rel_tol = 1e-12;
+steady_covariance_opts = odeset( ...
+                                'RelTol', steady_covariance_rel_tol, ...
+                                'AbsTol', [1e-12 * ones(18, 1); 1e-28 * ones(324, 1)]);
+steady_length_variance = zeros(size(tension_psd_sweep));
+steady_length_variance_floor = zeros(size(tension_psd_sweep));
+steady_length_variance_theory = tension_psd_sweep * gain^2 / ...
+                                (2 * spring_damper.damping * ...
+                                 spring_damper.stiffness);
+for c = 1:numel(tension_psd_sweep)
+    steady_noise = struct('tension_psd', tension_psd_sweep(c), ...
+                          'transverse_psd', 0, ...
+                          'body_3_acceleration_psd', 0);
+    steady_rhs = @(t, packed_state) propagate( ...
+                                              t, packed_state, ...
+                                              mass_2_fraction, ...
+                                              tether_length_rate, accel_fn, ...
+                                              steady_noise, spring_damper);
+    steady_sol = ode113(steady_rhs, [0, steady_duration], ...
+                        [initial_state; zeros(324, 1)], ...
+                        steady_covariance_opts);
+    steady_state = steady_sol.y(1:18, end);
+    steady_covariance = reshape(steady_sol.y(19:end, end), [18, 18]);
+    separation = steady_state(4:6) - steady_state(1:3);
+    direction = separation / norm(separation);
+    length_gradient = [-direction; direction];
+    position_covariance = steady_covariance(1:6, 1:6);
+    steady_length_variance(c) = ...
+        length_gradient' * position_covariance * length_gradient;
+    steady_length_variance_floor(c) = ...
+        steady_covariance_rel_tol * norm(position_covariance);
+end
+
+length_variance_scale_m2 = length_scale_m^2;
+figure('Name', 'Steady-state length covariance', 'Color', 'w');
+loglog(tension_psd_sweep, ...
+       steady_length_variance * length_variance_scale_m2, 'o', ...
+       'MarkerSize', 7, 'LineWidth', 1.5, ...
+       'DisplayName', 'Full covariance propagation');
+hold('on');
+loglog(tension_psd_sweep, ...
+       steady_length_variance_theory * length_variance_scale_m2, '--', ...
+       'LineWidth', 1.5, ...
+       'DisplayName', 'Stationary-oscillator theory');
+loglog(tension_psd_sweep, ...
+       steady_length_variance_floor * length_variance_scale_m2, ':', ...
+       'Color', [0.4, 0.4, 0.4], 'LineWidth', 1.5, ...
+       'DisplayName', 'Estimated integration-error floor');
+grid('on');
+xlabel('Tension process-noise PSD q [nondimensional]');
+ylabel('Steady-state tether length variance [m^2]');
+title(sprintf('Length covariance after %.1f damping time constants', ...
+              steady_duration * natural_frequency));
+legend('Location', 'northwest');
+for c = 1:numel(tension_psd_sweep)
+    fprintf(['  q_T = %.1e: simulated/theory variance = %.3f, ', ...
+             'variance/floor = %.2g\n'], ...
+            tension_psd_sweep(c), ...
+            steady_length_variance(c) / steady_length_variance_theory(c), ...
+            steady_length_variance(c) / steady_length_variance_floor(c));
+end
 
 %% Local functions
 function packed = propagatePacked(state_0, covariance_0, t_end, t_eval, args, ...
