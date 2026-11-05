@@ -9,10 +9,14 @@
 %   State convention (nondimensional, CR3BP rotating frame):
 %     x = [p1; p2; p3; v1; v2; v3], with each block 3x1.
 %     Body 1 = counterweight, 2 = catch mechanism, 3 = payload.
+%   The tether truth and EKF use the critically damped spring-damper model;
+%   process noise is included in covariance propagation, but not simulated as
+%   a random realization in the truth trajectory. Measurement updates use an
+%   iterated EKF (config.ekf_iterations) because the long-baseline crosslink
+%   measurements are strongly nonlinear over the initial position uncertainty.
 %
-%   Truth begins with a random perturbation from the estimated initial state.
-%   Process noise is included in covariance propagation, but not simulated as
-%   a random realization in the truth trajectory.
+%   Truth is the nominal initial condition; each Monte Carlo run starts its
+%   filter from an estimate sampled from the initial covariance.
 
 %% Run the EKF demonstration
 clear;
@@ -23,16 +27,21 @@ rng(1, 'twister');
 
 config = demoConfig();
 preparePlotOutput(config);
-[initial_state, initial_covariance] = makeInitialEstimate(config);
+[initial_state, initial_covariance, initial_factor] = makeInitialEstimate(config);
 scenario = propagateScenario(initial_state, config);
-filter_run = runFilter(scenario, initial_state, initial_covariance, config);
+% Truth is the nominal initial condition; each trial's estimate is a sample
+% drawn around it with the initial covariance.
+filter_run = runFilter(scenario, ...
+                       perturbInitialState(initial_state, initial_factor), ...
+                       initial_covariance, config);
 
 reportFilterRun(filter_run, config);
 plotPredictionHistory(filter_run.history, config);
 
 fprintf(['\nReference filter run complete. Starting %d Monte Carlo ' ...
          'runs...\n'], config.monte_carlo_runs);
-monte_carlo = runMonteCarlo(initial_state, filter_run, config);
+monte_carlo = runMonteCarlo(scenario, initial_state, initial_covariance, ...
+                            initial_factor, filter_run, config);
 fprintf('Monte Carlo runs complete. Generating reports and visualizations...\n');
 runMonteCarloAnalyses(monteCarloAnalyses(), monte_carlo, config);
 
@@ -48,12 +57,17 @@ function config = demoConfig()
     config.mass_2_fraction = 0.5;
     config.tether_length_rate = 0;
     config.tether_direction = [1; 0; 0];
+    natural_frequency = config.spin_rate * config.time_scale;
+    initial_length = config.tether_length_km / config.length_scale;
+    config.spring_damper = struct('initial_length', initial_length, ...
+                                  'stiffness', natural_frequency^2, ...
+                                  'damping', 2 * natural_frequency);
     config.halo_state = [0.831987145310294; 0; 0.12575552414079; ...
                          0; 0.239887839725451; 0];
 
-    config.duration_s = 2 * 3600;
+    config.duration_s = 12 * 3600;
     config.duration = config.duration_s / config.time_scale;
-    config.measurement_count = 6;
+    config.measurement_count = 12;
     % The last update occurs this long before the end, when the payload
     % reaches the catch mechanism and relative measurements are singular-prone.
     config.final_measurement_margin_min = 10;
@@ -63,14 +77,20 @@ function config = demoConfig()
     config.measurement_times = (1:update_count) * ...
                                (last_measurement_s / update_count) / ...
                                config.time_scale;
-    config.position_sigma_km = 1;
-    config.velocity_sigma_mps = 1e-2;
-    config.process_noise = struct('tension_psd', 1e-8, ...
+    config.initial_sigma = struct('com_position', 100, ...       % [km]
+                                  'com_velocity', 1, ...          % [m/s]
+                                  'relative_position', 10 / 1000, ... % [km]
+                                  'relative_velocity', 0.1, ...     % [m/s]
+                                  'payload_position', 100, ...    % [km]
+                                  'payload_velocity', 1);         % [m/s]
+    config.process_noise = struct('tension_psd', 1e-6, ...
                                   'transverse_psd', 1e-8, ...
                                   'body_3_acceleration_psd', 1e-8);
 
     config.measurement_mask = 2^8 - 1;
-    config.monte_carlo_runs = 100;            % State-only runs for NEES/ANEES
+    config.ekf_iterations = 5;                % Max IEKF relinearizations per update
+    config.residual_sigma_floor = 0.1;        % Residual sigma floor [x sensor sigma]
+    config.monte_carlo_runs = 100;            % Full-EKF runs for NEES/ANEES/NIS
     config.nees_confidence = 0.95;
     config.corner_ellipse_sigma = 3;          % Mahalanobis radius of corner ellipses
     config.plot_samples_per_interval = 31;
@@ -84,8 +104,8 @@ function config = demoConfig()
                                'rmse', "show", ...
                                'innovations', "show", ...
                                'residuals', "show", ...
-                               'corner', "off", ...
-                               'relative_corner', "off");
+                               'corner', "show", ...
+                               'relative_corner', "show");
     config.plot_output_folder = fullfile(fileparts(mfilename('fullpath')), ...
                                          '..', 'runs', 'tetherFilterDemo');
     config.plot_file_format = "png";
@@ -97,10 +117,9 @@ function config = demoConfig()
                          "Catch mechanism (2)", "Payload (3)"];
 end
 
-function [state, covariance] = makeInitialEstimate(config)
+function [state, covariance, factor] = makeInitialEstimate(config)
     % Initialize the tethered bodies, rendezvous payload, and covariance.
     accel_fn = @(x) coa.orbit.cr3bp(x, config.mu);
-    propagate = @coa.orbit.tetheredThreeBodyEkfPropagation;
 
     tether_length = config.tether_length_km / config.length_scale;
     spin_rate = config.spin_rate * config.time_scale;
@@ -108,20 +127,24 @@ function [state, covariance] = makeInitialEstimate(config)
     tether_state = tetherInitialState(config.halo_state, tether_length, ...
                                       config.mass_2_fraction, spin_rate, ...
                                       tether_rate, config.tether_direction);
-    state = rendezvousInitialState(tether_state, config, accel_fn, propagate);
+    state = rendezvousInitialState(tether_state, config, accel_fn);
 
-    position_sigma = config.position_sigma_km / config.length_scale;
-    velocity_sigma = config.velocity_sigma_mps / 1000 * ...
-                     config.time_scale / config.length_scale;
-    covariance = diag([repmat(position_sigma^2, 9, 1); ...
-                       repmat(velocity_sigma^2, 9, 1)]);
+    sigma = config.initial_sigma;
+    for field = ["com_position", "relative_position", "payload_position"]
+        sigma.(field) = sigma.(field) / config.length_scale;
+    end
+    for field = ["com_velocity", "relative_velocity", "payload_velocity"]
+        sigma.(field) = sigma.(field) / 1000 * ...
+                        config.time_scale / config.length_scale;
+    end
+    [covariance, factor] = ...
+        coa.filter.tetherInitialCovariance(config.mass_2_fraction, sigma);
 end
 
-function state = rendezvousInitialState(tether_state, config, accel_fn, propagate)
+function state = rendezvousInitialState(tether_state, config, accel_fn)
     % Back-propagate the catch mechanism to initialize a rendezvous payload.
     duration = config.duration;
-    tether_rhs = @(t, x) propagate(t, x, config.mass_2_fraction, ...
-                                   config.tether_length_rate, accel_fn);
+    tether_rhs = dynamicsFunction(config);
 
     % Body 3 is a placeholder here; it does not affect the tether dynamics.
     placeholder_state = [tether_state(1:6); tether_state(4:6); ...
@@ -141,29 +164,28 @@ end
 
 %% Truth trajectory
 function scenario = propagateScenario(initial_state, config)
-    % Propagate one perturbed truth trajectory through the measurement times.
+    % Propagate the nominal initial condition; every trial shares this truth.
     scenario.truth_solution = ode113(dynamicsFunction(config), ...
-                                     [0, config.duration], ...
-                                     perturbInitialState(initial_state, config), ...
+                                     [0, config.duration], initial_state, ...
                                      odeset('RelTol', 1e-10, 'AbsTol', 1e-12));
 end
 
-function rhs = dynamicsFunction(config, varargin)
+function rhs = dynamicsFunction(config, process_noise)
     % Tethered three-body dynamics; optional process noise gives the packed
-    % state-and-covariance dynamics used by the filter.
+    % state-and-covariance dynamics used by the filter. State-only and
+    % covariance propagation both use the same spring-damper tether model.
     accel_fn = @(x) coa.orbit.cr3bp(x, config.mu);
-    args = {config.mass_2_fraction, config.tether_length_rate, accel_fn, varargin{:}};
+    if nargin < 2
+        process_noise = struct();
+    end
+    args = {config.mass_2_fraction, config.tether_length_rate, accel_fn, ...
+            process_noise, config.spring_damper};
     rhs = @(t, x) coa.orbit.tetheredThreeBodyEkfPropagation(t, x, args{:});
 end
 
-function state = perturbInitialState(initial_state, config)
-    % Draw truth's initial error with the same componentwise sigmas as P0.
-    position_sigma = config.position_sigma_km / config.length_scale;
-    velocity_sigma = config.velocity_sigma_mps / 1000 * ...
-                     config.time_scale / config.length_scale;
-    initial_error = [position_sigma * randn(9, 1); ...
-                     velocity_sigma * randn(9, 1)];
-    state = initial_state + initial_error;
+function state = perturbInitialState(initial_state, initial_factor)
+    % Draw a zero-mean initial error with the covariance used by the filter.
+    state = initial_state + initial_factor * randn(18, 1);
 end
 
 %% Filter propagation and measurement updates
@@ -243,7 +265,7 @@ function update = measurementUpdate(prior_state, prior_covariance, truth_state, 
 
     [posterior_state, posterior_covariance, info] = ...
         coa.filter.ekfUpdate(prior_state, prior_covariance, observation, ...
-                             model, angleRows(mask));
+                             model, angleRows(mask), config.ekf_iterations);
 
     update = info;
     update.truth_state = truth_state;
@@ -257,12 +279,6 @@ function rows = angleRows(mask)
     % Rows of the stacked measurement vector holding right ascension and
     % declination (groups 1 and 2), which need wrapping to [-pi, pi).
     rows = (1:(6 * bitand(mask, 1) + 4 * bitand(floor(mask / 2), 1)))';
-end
-
-function innovation = wrapAngleInnovation(innovation, mask)
-    % Wrap angular rows to [-pi, pi) for the state-only Monte Carlo runs.
-    rows = angleRows(mask);
-    innovation(rows) = mod(innovation(rows) + pi, 2 * pi) - pi;
 end
 
 function history = emptyHistory()
@@ -292,58 +308,61 @@ function history = appendPredictionHistory(history, time, packed, truth, config)
 end
 
 %% Monte Carlo consistency check (NEES / ANEES)
-function monte_carlo = runMonteCarlo(initial_state, filter_run, config)
-    % Repeat the filter with fresh truth and noise, propagating state only.
-    % The covariance and Kalman gains are taken from the reference run, so no
-    % covariance is integrated inside the Monte Carlo loop.
-    state_rhs = dynamicsFunction(config);
-    truth_options = odeset('RelTol', 1e-10, 'AbsTol', 1e-12);
-    filter_options = odeset('RelTol', 1e-9, 'AbsTol', 1e-10);
-    model = @coa.meas.measurementModels;
+function monte_carlo = runMonteCarlo(scenario, initial_state, initial_covariance, ...
+                                     initial_factor, filter_run, config)
+    % Repeat the full EKF against the fixed truth, with a fresh initial estimate
+    % sample and measurement noise per run. Every run integrates its
+    % own covariance and computes its own gains, so ANEES and NIS test the
+    % filter as implemented.
+    filter_rhs = dynamicsFunction(config, config.process_noise);
+    abs_tolerance = [1e-10 * ones(18, 1); 1e-24 * ones(324, 1)];
+    filter_options = odeset('RelTol', 1e-9, 'AbsTol', abs_tolerance);
+    velocity_scale = config.length_scale / config.time_scale;
+    measurement_covariances = ...
+        coa.meas.measurementCovariances(config.length_scale, velocity_scale);
 
     blocks = neesBlocks();
     updates = filter_run.updates;
     run_count = config.monte_carlo_runs;
-    errors = zeros(run_count, config.measurement_count, 18);
+    step_count = config.measurement_count;
+    errors = zeros(run_count, step_count, 18);
     measurement_count = numel(updates(1).innovation);
-    innovations = zeros(run_count, config.measurement_count, measurement_count);
+    innovations = zeros(run_count, step_count, measurement_count);
     residuals = zeros(size(innovations));
+    run_covariances = zeros(18, 18, step_count, run_count);
+    nis = zeros(run_count, step_count);
     final_errors = zeros(run_count, 18);
 
     timer = tic;
     for run = 1:run_count
-        truth_solution = ode113(state_rhs, [0, config.duration], ...
-                                perturbInitialState(initial_state, config), ...
-                                truth_options);
-        estimate = initial_state;
+        truth_solution = scenario.truth_solution;
+        sampled_state = perturbInitialState(initial_state, initial_factor);
+        packed_state = [sampled_state; initial_covariance(:)];
         previous_time = 0;
 
-        for k = 1:config.measurement_count
+        for k = 1:step_count
             time = config.measurement_times(k);
-            solution = ode113(state_rhs, [previous_time, time], estimate, ...
+            solution = ode113(filter_rhs, [previous_time, time], packed_state, ...
                               filter_options);
-            prior_state = solution.y(:, end);
             truth_state = deval(truth_solution, time);
-
-            observation = model(truth_state, config.measurement_mask) + ...
-                updates(k).noise_chol * randn(size(innovations, 3), 1);
-            predicted = model(prior_state, config.measurement_mask);
-            innovation = wrapAngleInnovation(observation - predicted, ...
-                                             config.measurement_mask);
-            estimate = prior_state + updates(k).gain * innovation;
+            update = measurementUpdate(solution.y(1:18, end), ...
+                                       unpackCovariance(solution.y(19:end, end)), ...
+                                       truth_state, measurement_covariances, config);
+            packed_state = [update.posterior_state; update.posterior_covariance(:)];
             previous_time = time;
 
-            errors(run, k, :) = truth_state - estimate;
-            innovations(run, k, :) = innovation;
-            postfit = observation - model(estimate, config.measurement_mask);
-            residuals(run, k, :) = wrapAngleInnovation(postfit, ...
-                                                       config.measurement_mask);
+            errors(run, k, :) = truth_state - update.posterior_state;
+            innovations(run, k, :) = update.innovation;
+            residuals(run, k, :) = update.residual;
+            run_covariances(:, :, k, run) = update.posterior_covariance;
+            nis(run, k) = update.innovation' * ...
+                (update.innovation_covariance \ update.innovation);
         end
 
-        % Coast (no update) to the end of the scenario; draws no random numbers.
-        solution = ode113(state_rhs, [previous_time, config.duration], estimate, ...
-                          filter_options);
-        final_errors(run, :) = truth_solution.y(:, end) - solution.y(:, end);
+        % Coast (no update) to the end of the scenario.
+        solution = ode113(filter_rhs, [previous_time, config.duration], ...
+                          packed_state, filter_options);
+        final_errors(run, :) = truth_solution.y(:, end) - solution.y(1:18, end);
 
         if run == run_count || floor(10 * run / run_count) > ...
                 floor(10 * (run - 1) / run_count)
@@ -363,8 +382,11 @@ function monte_carlo = runMonteCarlo(initial_state, filter_run, config)
     monte_carlo.reference_updates = updates;      % the single filter run shown in plots
     monte_carlo.covariances = cat(3, updates.posterior_covariance);
     monte_carlo.blocks = blocks;
-    monte_carlo.nees = computeNees(errors, monte_carlo.covariances, blocks);
+    monte_carlo.nees = computeNees(errors, run_covariances, blocks);
     monte_carlo.anees = squeeze(mean(monte_carlo.nees, 1));
+    monte_carlo.nis = nis;                        % [run, update]
+    monte_carlo.anis = mean(nis, 1)';
+    monte_carlo.nis_dof = measurement_count;
     monte_carlo.time_minutes = config.measurement_times * config.time_scale / 60;
     monte_carlo.run_count = run_count;
     % Final-time snapshots: the last measurement update, then the prediction-only
@@ -394,14 +416,16 @@ end
 
 function nees = computeNees(errors, covariances, blocks)
     % NEES per run, update, and block from stored errors and covariances.
+    % covariances is [18, 18, update, run] (each run's own posterior).
     [run_count, step_count, ~] = size(errors);
     nees = zeros(run_count, step_count, numel(blocks));
-    for k = 1:step_count
-        for b = 1:numel(blocks)
-            rows = blocks(b).rows;
-            block_error = reshape(errors(:, k, rows), run_count, []).';
-            block_covariance = covariances(rows, rows, k);
-            nees(:, k, b) = sum(block_error .* (block_covariance \ block_error), 1)';
+    for run = 1:run_count
+        for k = 1:step_count
+            for b = 1:numel(blocks)
+                rows = blocks(b).rows;
+                e = squeeze(errors(run, k, rows));
+                nees(run, k, b) = e' * (covariances(rows, rows, k, run) \ e);
+            end
         end
     end
 end
@@ -410,9 +434,9 @@ function analyses = monteCarloAnalyses()
     % Registry of Monte Carlo analyses, run in order. To add one, write a
     % function taking (monte_carlo, config) -- a report, a plot, or both -- and
     % append its handle(s) here.
-    analyses = {@reportAnees, @plotAnees, @plotCorner, @plotInnovations, ...
-                @plotResiduals, @plotRmse, @reportRelativeState, ...
-                @plotRelativeCorner};
+    analyses = {@reportAnees, @reportNis, @plotAnees, @plotCorner, ...
+                @plotInnovations, @plotResiduals, @plotRmse, ...
+                @reportRelativeState, @plotRelativeCorner};
 end
 
 function runMonteCarloAnalyses(analyses, monte_carlo, config)
@@ -424,7 +448,7 @@ end
 
 function blocks = neesBlocks()
     % Whole-state NEES plus one block per body (position and velocity).
-    blocks = struct('name', "Tether state", 'rows', 1:12, 'dof', 12);
+    blocks = struct('name', "All states", 'rows', 1:18, 'dof', 18);
     names = ["Counterweight (1)", "Catch mechanism (2)", "Payload (3)"];
     for body = 1:3
         offset = 3 * (body - 1);
@@ -444,7 +468,7 @@ end
 
 function reportAnees(monte_carlo, config)
     % Summarize ANEES against its acceptance region for each block.
-    fprintf('\nANEES over %d state-only Monte Carlo runs (%.0f%% region)\n', ...
+    fprintf('\nANEES over %d full-EKF Monte Carlo runs (%.0f%% region)\n', ...
             monte_carlo.run_count, 100 * config.nees_confidence);
     fprintf('%-20s %5s  %9s  %-19s  %s\n', 'Block', 'dof', 'Mean ANEES', ...
             'Acceptance region', 'Steps inside');
@@ -460,17 +484,32 @@ function reportAnees(monte_carlo, config)
     end
 end
 
+function reportNis(monte_carlo, config)
+    % Average NIS per update against its chi-square acceptance region.
+    bounds = neesBounds(monte_carlo.run_count, monte_carlo.nis_dof, ...
+                        config.nees_confidence);
+    fprintf('\nANIS per update (dof %d, region [%.1f, %.1f])\n', ...
+            monte_carlo.nis_dof, bounds.lower, bounds.upper);
+    for k = 1:numel(monte_carlo.anis)
+        fprintf('  t = %7.1f min: ANIS = %9.3g\n', monte_carlo.time_minutes(k), ...
+                monte_carlo.anis(k));
+    end
+end
+
 function plotAnees(monte_carlo, config)
-    % Plot ANEES versus time with the chi-square acceptance region.
+    % Plot per-body ANEES versus time with the chi-square acceptance region.
     if plotMode(config, 'anees') == "off"
         return
     end
     fig = newFigure(config, 'anees', 'Name', 'ANEES consistency', 'Color', 'w');
-    layout = tiledlayout(2, 2, 'TileSpacing', 'compact', 'Padding', 'compact');
+    body_blocks = 2:numel(monte_carlo.blocks);
+    layout = tiledlayout(1, numel(body_blocks), ...
+                         'TileSpacing', 'compact', 'Padding', 'compact');
     time = monte_carlo.time_minutes;
-    colors = lines(numel(monte_carlo.blocks));
+    colors = lines(numel(body_blocks));
 
-    for b = 1:numel(monte_carlo.blocks)
+    for panel = 1:numel(body_blocks)
+        b = body_blocks(panel);
         ax = nexttile(layout);
         hold(ax, 'on');
         % Normalize by the block dimension so the expected value is 1.
@@ -482,8 +521,8 @@ function plotAnees(monte_carlo, config)
              [0.5, 0.5, 0.5], 'FaceAlpha', 0.2, 'EdgeColor', [0.45, 0.45, 0.45], ...
              'LineWidth', 0.5);
         yline(ax, 1, 'k--');
-        plot(ax, time, monte_carlo.anees(:, b) / dof, '-o', 'Color', colors(b, :), ...
-             'LineWidth', 1.1, 'MarkerSize', 3);
+        plot(ax, time, monte_carlo.anees(:, b) / dof, '-o', ...
+             'Color', colors(panel, :), 'LineWidth', 1.1, 'MarkerSize', 3);
         set(ax, 'YScale', 'log');
         grid(ax, 'on');
         title(ax, sprintf('%s (n = %d)', monte_carlo.blocks(b).name, ...
@@ -572,7 +611,8 @@ function plotInnovations(monte_carlo, config)
 end
 
 function plotResiduals(monte_carlo, config)
-    % Post-fit residuals, normalized by sqrt(diag(R - H P+ H')).
+    % Post-fit residuals, normalized by sqrt(diag(R - H P+ H')), floored at
+    % config.residual_sigma_floor times the sensor sigma.
     plotMeasurementHistory(monte_carlo, config, 'residual', ...
                            'residual_covariance', "Post-fit residuals");
 end
@@ -591,7 +631,13 @@ function plotMeasurementHistory(monte_carlo, config, value_field, covariance_fie
     updates = monte_carlo.reference_updates;
     sigma = sqrt(max(cell2mat(arrayfun(@(u) diag(u.(covariance_field)), ...
                                        updates', 'UniformOutput', false)), 0));
-    sigma(sigma == 0) = eps;
+    % Post-fit variances R - H P+ H' can vanish (or round negative) for
+    % near-exact measurements; floor sigma at a fraction of the sensor sigma so
+    % the normalized values stay finite. Innovations are never affected, since
+    % S >= R.
+    noise_sigma = sqrt(cell2mat(arrayfun(@(u) sum(u.noise_chol.^2, 2), ...
+                                         updates', 'UniformOutput', false)));
+    sigma = max(sigma, config.residual_sigma_floor * noise_sigma);
     reference = cell2mat(arrayfun(@(u) u.(value_field), updates', ...
                                   'UniformOutput', false)) ./ sigma;
     samples = monte_carlo.(plural(value_field));
