@@ -2,8 +2,8 @@
 
 function [state, covariance, info] = ekfUpdate(prior_state, prior_covariance, ...
                                                observation, measurement_model, ...
-                                               angle_rows)
-    % EKFUPDATE Joseph-form extended Kalman filter measurement update.
+                                               angle_rows, max_iterations)
+    % EKFUPDATE Joseph-form (iterated) extended Kalman filter measurement update.
     %   [state, covariance] = coa.filter.ekfUpdate(prior_state, ...
     %       prior_covariance, observation, measurement_model)
     %   corrects a prior estimate with one observation. The function is
@@ -18,8 +18,15 @@ function [state, covariance, info] = ekfUpdate(prior_state, prior_covariance, ..
     %   innovation and residual rows to [-pi, pi). Without this, an angle
     %   near the atan2 branch cut produces a spurious 2*pi innovation.
     %
+    %   [___] = coa.filter.ekfUpdate(prior_state, prior_covariance, ...
+    %       observation, measurement_model, angle_rows, max_iterations)
+    %   relinearizes the measurement model about the latest iterate, up to
+    %   max_iterations times (iterated EKF). The default of 1 is the ordinary
+    %   EKF update. Iteration stops early once the step is below 1e-3 prior
+    %   standard deviations, i.e. (step'*inv(P^-)*step) < 1e-6.
+    %
     %   With H the measurement Jacobian at the prior and R the measurement
-    %   noise covariance, the update is
+    %   noise covariance, the single-iteration update is
     %       nu  = z - h(x^-)                           (innovation)
     %       S   = H*P^-*H' + R                         (innovation covariance)
     %       K   = P^-*H'*S^-1                          (gain)
@@ -27,6 +34,11 @@ function [state, covariance, info] = ekfUpdate(prior_state, prior_covariance, ..
     %       P^+ = (I - K*H)*P^-*(I - K*H)' + K*R*K'    (Joseph form)
     %   The Joseph form stays symmetric and positive semidefinite under
     %   roundoff and for suboptimal gains. P^+ is symmetrized before return.
+    %   For iterations i = 1, 2, ..., with iterate eta_1 = x^-, H and R are
+    %   evaluated at eta_i and
+    %       nu_i = z - h(eta_i) - H*(x^- - eta_i),   eta_(i+1) = x^- + K*nu_i
+    %   with S and K built from that H. x^+ is the last iterate; P^+ uses the
+    %   final H and K.
     %   See derivations/ekf_health_diagnostics.tex for the diagnostics built
     %   on info.
     %
@@ -48,27 +60,31 @@ function [state, covariance, info] = ekfUpdate(prior_state, prior_covariance, ..
     %                             @(x) coa.meas.measurementModels(x, mask, covs)
     %     angle_rows          (optional) Row indices of angular measurements
     %                         to wrap. Default: none.
+    %     max_iterations      (optional) Maximum number of relinearized
+    %                         passes, a positive integer. Default: 1.
     %
     %   Outputs:
     %     state       n-by-1 corrected (posterior) estimate x^+.
     %     covariance  n-by-n corrected (posterior) covariance P^+.
     %     info        Scalar struct:
-    %       innovation              m-by-1 pre-fit innovation nu (wrapped).
-    %       innovation_covariance   m-by-m S. The normalized innovation
-    %                               squared nu'*(S\nu) is chi-square with m
-    %                               degrees of freedom for a consistent filter.
-    %       gain                    n-by-m Kalman gain K.
+    %       innovation              m-by-1 pre-fit innovation nu (wrapped), from
+    %                               the first iteration, i.e. about the prior.
+    %       innovation_covariance   m-by-m S of the first iteration. The
+    %                               normalized innovation squared nu'*(S\nu)
+    %                               is chi-square with m degrees of freedom
+    %                               for a consistent filter.
+    %       gain                    n-by-m Kalman gain K (final iteration).
     %       residual                m-by-1 post-fit residual z - h(x^+)
     %                               (wrapped).
     %       residual_covariance     m-by-m R - H*P^+*H', the post-fit residual
     %                               covariance for the optimal gain, with H
-    %                               the prior-point Jacobian.
+    %                               the final-iteration Jacobian.
+    %       iterations              Number of passes performed.
     %
     %   Notes:
     %     - S must be positive definite; otherwise the function raises
     %       coa:filter:ekfUpdate:SingularInnovationCovariance.
-    %     - H is evaluated once, at the prior state; the update is not
-    %       iterated.
+    %     - With max_iterations = 1, H is evaluated once, at the prior state.
     %     - A zero-row measurement returns the prior unchanged.
     %
     %   Example:
@@ -82,6 +98,7 @@ function [state, covariance, info] = ekfUpdate(prior_state, prior_covariance, ..
         observation (:, 1) double {mustBeFinite}
         measurement_model (1, 1) function_handle
         angle_rows (:, 1) double {mustBeInteger, mustBePositive} = zeros(0, 1)
+        max_iterations (1, 1) double {mustBeInteger, mustBePositive} = 1
     end
 
     state_count = numel(prior_state);
@@ -110,18 +127,40 @@ function [state, covariance, info] = ekfUpdate(prior_state, prior_covariance, ..
               measurement_count);
     end
 
-    innovation = wrapRows(observation - predicted_measurement, angle_rows);
-    cross_covariance = jacobian * prior_covariance;
-    innovation_covariance = cross_covariance * jacobian' + noise_covariance;
+    % Iterated update: relinearize about the latest iterate eta, starting at the
+    % prior, so the first pass is the ordinary EKF update.
+    step_tolerance = 1e-6;
+    iterate = prior_state;
+    for iteration = 1:max_iterations
+        if iteration > 1
+            [predicted_measurement, jacobian, noise_covariance] = ...
+                measurement_model(iterate);
+        end
+        residual = wrapRows(observation - predicted_measurement, angle_rows);
+        innovation = residual - jacobian * (prior_state - iterate);
+        cross_covariance = jacobian * prior_covariance;
+        innovation_covariance = cross_covariance * jacobian' + noise_covariance;
 
-    [~, not_positive_definite] = chol(innovation_covariance);
-    if not_positive_definite
-        error('coa:filter:ekfUpdate:SingularInnovationCovariance', ...
-              'The innovation covariance is not positive definite.');
+        [~, not_positive_definite] = chol(innovation_covariance);
+        if not_positive_definite
+            error('coa:filter:ekfUpdate:SingularInnovationCovariance', ...
+                  'The innovation covariance is not positive definite.');
+        end
+
+        gain = (innovation_covariance \ cross_covariance)';
+        next_iterate = prior_state + gain * innovation;
+        if iteration == 1
+            info.innovation = innovation;
+            info.innovation_covariance = innovation_covariance;
+        end
+
+        step = next_iterate - iterate;
+        iterate = next_iterate;
+        if iteration > 1 && step' * (prior_covariance \ step) < step_tolerance
+            break
+        end
     end
-
-    gain = (innovation_covariance \ cross_covariance)';
-    state = prior_state + gain * innovation;
+    state = iterate;
 
     correction = eye(state_count) - gain * jacobian;
     covariance = correction * prior_covariance * correction' + ...
@@ -130,12 +169,11 @@ function [state, covariance, info] = ekfUpdate(prior_state, prior_covariance, ..
 
     postfit = observation - measurement_model(state);
 
-    info.innovation = innovation;
-    info.innovation_covariance = innovation_covariance;
     info.gain = gain;
     info.residual = wrapRows(postfit, angle_rows);
     info.residual_covariance = noise_covariance - ...
                                jacobian * covariance * jacobian';
+    info.iterations = iteration;
 end
 
 function values = wrapRows(values, rows)
