@@ -65,12 +65,12 @@ function config = demoConfig()
     config.halo_state = [0.831987145310294; 0; 0.12575552414079; ...
                          0; 0.239887839725451; 0];
 
-    config.duration_s = 12 * 3600;
+    config.duration_s = 24 * 3600;
     config.duration = config.duration_s / config.time_scale;
-    config.measurement_count = 12;
+    config.measurement_count = 6;
     % The last update occurs this long before the end, when the payload
     % reaches the catch mechanism and relative measurements are singular-prone.
-    config.final_measurement_margin_min = 10;
+    config.final_measurement_margin_min = 30;
     last_measurement_s = config.duration_s - ...
                          60 * config.final_measurement_margin_min;
     update_count = config.measurement_count;
