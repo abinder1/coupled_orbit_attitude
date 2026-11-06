@@ -399,8 +399,9 @@ function monte_carlo = runMonteCarlo(scenario, initial_state, initial_covariance
                                       final_errors, filter_run.final_covariance, ...
                                       filter_run.final_state);
     monte_carlo.endpoints = [update_endpoint, predicted_endpoint];
-    monte_carlo.bounds = neesBounds(run_count, [blocks.dof], ...
-                                    config.nees_confidence);
+    [monte_carlo.bounds.lower, monte_carlo.bounds.upper] = ...
+        coa.filter.meanChiSquareBounds(run_count, [blocks.dof], ...
+                                       config.nees_confidence);
 end
 
 function endpoint = makeEndpoint(kind, minutes, errors, covariance, state)
@@ -439,14 +440,6 @@ function blocks = neesBlocks()
     end
 end
 
-function bounds = neesBounds(run_count, dof, confidence)
-    % Two-sided chi-square acceptance region for ANEES, via gammaincinv.
-    tail = (1 - confidence) / 2;
-    total_dof = run_count * dof;
-    bounds.lower = 2 * gammaincinv(tail, total_dof / 2) / run_count;
-    bounds.upper = 2 * gammaincinv(1 - tail, total_dof / 2) / run_count;
-end
-
 function reportAnees(monte_carlo, config)
     % Summarize ANEES against its acceptance region for each block.
     fprintf('\nANEES over %d full-EKF Monte Carlo runs (%.0f%% region)\n', ...
@@ -467,8 +460,9 @@ end
 
 function reportNis(monte_carlo, config)
     % Average NIS per update against its chi-square acceptance region.
-    bounds = neesBounds(monte_carlo.run_count, monte_carlo.nis_dof, ...
-                        config.nees_confidence);
+    [bounds.lower, bounds.upper] = ...
+        coa.filter.meanChiSquareBounds(monte_carlo.run_count, monte_carlo.nis_dof, ...
+                                       config.nees_confidence);
     fprintf('\nANIS per update (dof %d, region [%.1f, %.1f])\n', ...
             monte_carlo.nis_dof, bounds.lower, bounds.upper);
     for k = 1:numel(monte_carlo.anis)
