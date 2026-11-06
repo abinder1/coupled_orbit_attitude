@@ -49,7 +49,8 @@ function [h, dh_dstate, noise_cov] = measurementModels(state, mask, meas_covs)
     %           groupName(state, meas_covs, compute_jacobian)
     %   where noise_cov is the covariance of that group's rows of h. Groups are
     %   built from the primitives in this package. To add a group, write its
-    %   function and append its handle to the list in groupFunctions.
+    %   function, append its handle to groupFunctions, and add its metadata to
+    %   coa.meas.measurementGroups in the same order.
     %
     %   Only sensor rows 1-19 in Sec. C of derivations/ekf_equations.tex are
     %   implemented. Accelerometers in rows 20-22 are candidates only; they
@@ -73,19 +74,22 @@ function [h, dh_dstate, noise_cov] = measurementModels(state, mask, meas_covs)
               'mask selects a group beyond the %d defined groups.', ...
               numel(group_functions));
     end
+    groups = coa.meas.measurementGroups(mask);
 
     h = zeros(0, 1);
     dh_dstate = zeros(0, 18);
     noise_cov = zeros(0, 0);
 
-    for group = 1:numel(group_functions)
-        if bitand(mask, 2^(group - 1)) > 0
-            [group_h, group_dh_dstate, group_cov] = ...
-                group_functions{group}(state, meas_covs, compute_jacobian);
-            h = [h; group_h]; %#ok<AGROW>
-            dh_dstate = [dh_dstate; group_dh_dstate]; %#ok<AGROW>
-            noise_cov = blkdiag(noise_cov, group_cov);
+    for group = groups
+        [group_h, group_dh_dstate, group_cov] = ...
+            group_functions{group.index}(state, meas_covs, compute_jacobian);
+        if numel(group_h) ~= numel(group.rows)
+            error('coa:meas:measurementModels:GroupSizeMismatch', ...
+                  'Measurement group %d does not match its metadata.', group.index);
         end
+        h = [h; group_h]; %#ok<AGROW>
+        dh_dstate = [dh_dstate; group_dh_dstate]; %#ok<AGROW>
+        noise_cov = blkdiag(noise_cov, group_cov);
     end
 end
 

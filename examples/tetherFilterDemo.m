@@ -264,10 +264,11 @@ function update = measurementUpdate(prior_state, prior_covariance, truth_state, 
     [true_measurement, ~, noise_covariance] = model(truth_state);
     noise_chol = chol(noise_covariance, 'lower');
     observation = true_measurement + noise_chol * randn(size(true_measurement));
+    [~, angle_rows] = coa.meas.measurementGroups(mask);
 
     [posterior_state, posterior_covariance, info] = ...
         coa.filter.ekfUpdate(prior_state, prior_covariance, observation, ...
-                             model, angleRows(mask), config.ekf_iterations);
+                             model, angle_rows, config.ekf_iterations);
 
     update = info;
     update.truth_state = truth_state;
@@ -275,12 +276,6 @@ function update = measurementUpdate(prior_state, prior_covariance, truth_state, 
     update.posterior_state = posterior_state;
     update.posterior_covariance = posterior_covariance;
     update.noise_chol = noise_chol;
-end
-
-function rows = angleRows(mask)
-    % Rows of the stacked measurement vector holding right ascension and
-    % declination (groups 1 and 2), which need wrapping to [-pi, pi).
-    rows = (1:(6 * bitand(mask, 1) + 4 * bitand(floor(mask / 2), 1)))';
 end
 
 function history = emptyHistory()
@@ -644,7 +639,7 @@ function plotMeasurementHistory(monte_carlo, config, value_field, covariance_fie
                                   'UniformOutput', false)) ./ sigma;
     samples = monte_carlo.(plural(value_field));
     time = monte_carlo.time_minutes;
-    groups = activeMeasurementGroups(config.measurement_mask);
+    groups = coa.meas.measurementGroups(config.measurement_mask);
 
     fig = newFigure(config, key, 'Name', title_text, 'Color', 'w', ...
                     'Position', [60, 60, 1100, 800]);
@@ -681,24 +676,6 @@ end
 function name = plural(field)
     % Name of the Monte Carlo array holding a per-update field.
     name = [field, 's'];
-end
-
-function groups = activeMeasurementGroups(mask)
-    % Selected sensor groups with their rows in the stacked measurement vector,
-    % in the order used by coa.meas.measurementModels.
-    names = ["Ground optical angles", "Camera / star-tracker angles", ...
-             "Camera angular size", "DSN range", "DSN range rate", ...
-             "Crosslink range", "Crosslink range rate", "GNSS position"];
-    sizes = [6, 4, 1, 3, 3, 2, 2, 9];
-    groups = struct('name', {}, 'rows', {});
-    offset = 0;
-    for group = 1:numel(names)
-        if bitand(mask, 2^(group - 1)) > 0
-            groups(end + 1) = struct('name', names(group), ...
-                                     'rows', offset + (1:sizes(group))); %#ok<AGROW>
-            offset = offset + sizes(group);
-        end
-    end
 end
 
 %% Results and visualizations

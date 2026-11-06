@@ -99,6 +99,55 @@ classdef MeasurementModelsTest < matlab.unittest.TestCase
             tc.verifyEqual(covariances.gnss_position, (10 * meter)^2 * eye(3));
         end
 
+        function groupMetadataMatchesAllMeasurementMasks(tc, state)
+            sizes = [6, 4, 1, 3, 3, 2, 2, 9];
+            names = ["Ground optical angles", "Camera / star-tracker angles", ...
+                     "Camera angular size", "DSN range", "DSN range rate", ...
+                     "Crosslink range", "Crosslink range rate", "GNSS position"];
+            covariances = coa.meas.measurementCovariances(1, 1);
+            single_h = cell(1, 8);
+            single_jacobian = cell(1, 8);
+            single_covariance = cell(1, 8);
+            for group = 1:8
+                [single_h{group}, single_jacobian{group}, ...
+                 single_covariance{group}] = ...
+                    coa.meas.measurementModels(state, 2^(group - 1), covariances);
+            end
+
+            for mask = 0:255
+                [groups, angle_rows] = coa.meas.measurementGroups(mask);
+                [h, jacobian, covariance] = ...
+                    coa.meas.measurementModels(state, mask, covariances);
+                active = find(bitget(mask, 1:8));
+                tc.verifyEqual(reshape([groups.index], 1, []), active);
+                tc.verifyEqual(angle_rows, ...
+                               (1:(6 * bitget(mask, 1) + 4 * bitget(mask, 2)))');
+                offset = 0;
+                for k = 1:numel(active)
+                    group = active(k);
+                    rows = offset + (1:sizes(group));
+                    tc.verifyEqual(groups(k).name, names(group));
+                    tc.verifyEqual(groups(k).rows, rows);
+                    tc.verifyEqual(h(rows), single_h{group});
+                    tc.verifyEqual(jacobian(rows, :), single_jacobian{group});
+                    tc.verifyEqual(covariance(rows, rows), single_covariance{group});
+                    offset = offset + sizes(group);
+                end
+                tc.verifySize(h, [offset, 1]);
+                tc.verifySize(jacobian, [offset, 18]);
+                tc.verifySize(covariance, [offset, offset]);
+            end
+        end
+
+        function invalidMeasurementGroupMasksAreRejected(tc, state)
+            tc.verifyError(@() coa.meas.measurementGroups(256), ...
+                           'coa:meas:measurementGroups:UnknownGroup');
+            tc.verifyError(@() coa.meas.measurementGroups(-1), ?MException);
+            tc.verifyError(@() coa.meas.measurementGroups(0.5), ?MException);
+            tc.verifyError(@() coa.meas.measurementModels(state, 256), ...
+                           'coa:meas:measurementModels:UnknownGroup');
+        end
+
         function measurementGroupsOnlyValidateRequestedCovariances(tc, state)
             [h, dh_dstate] = coa.meas.measurementModels(state, 2^7);
             tc.verifySize(h, [9, 1]);
