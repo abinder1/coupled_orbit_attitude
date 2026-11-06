@@ -379,7 +379,7 @@ function monte_carlo = runMonteCarlo(scenario, initial_state, initial_covariance
     monte_carlo.reference_updates = updates;      % the single filter run shown in plots
     monte_carlo.covariances = cat(3, updates.posterior_covariance);
     monte_carlo.blocks = blocks;
-    monte_carlo.nees = computeNees(errors, run_covariances, blocks);
+    monte_carlo.nees = coa.filter.computeNees(errors, run_covariances, blocks);
     monte_carlo.anees = squeeze(mean(monte_carlo.nees, 1));
     monte_carlo.nis = nis;                        % [run, update]
     monte_carlo.anis = mean(nis, 1)';
@@ -409,22 +409,6 @@ function endpoint = makeEndpoint(kind, minutes, errors, covariance, state)
     endpoint = struct('label', sprintf('t = %.0f min (%s)', minutes, kind), ...
                       'errors', errors, 'covariance', covariance, ...
                       'reference_state', state);
-end
-
-function nees = computeNees(errors, covariances, blocks)
-    % NEES per run, update, and block from stored errors and covariances.
-    % covariances is [18, 18, update, run] (each run's own posterior).
-    [run_count, step_count, ~] = size(errors);
-    nees = zeros(run_count, step_count, numel(blocks));
-    for run = 1:run_count
-        for k = 1:step_count
-            for b = 1:numel(blocks)
-                rows = blocks(b).rows;
-                e = squeeze(errors(run, k, rows));
-                nees(run, k, b) = e' * (covariances(rows, rows, k, run) \ e);
-            end
-        end
-    end
 end
 
 function analyses = monteCarloAnalyses()
