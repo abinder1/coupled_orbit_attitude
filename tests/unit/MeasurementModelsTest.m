@@ -80,6 +80,25 @@ classdef MeasurementModelsTest < matlab.unittest.TestCase
                            "AbsTol", 2e-6, "RelTol", 2e-6);
         end
 
+        function nominalMeasurementCovariancesUseConfiguredSensorAccuracies(tc)
+            length_scale = 384400;
+            speed_scale = 2;
+            covariances = coa.meas.measurementCovariances(length_scale, speed_scale);
+            arcsec = pi / 180 / 3600;
+            meter = 1e-3 / length_scale;
+            meter_per_sec = 1e-3 / speed_scale;
+
+            tc.verifyEqual(covariances.ground_angles, (10 * arcsec)^2 * eye(2));
+            tc.verifyEqual(covariances.camera_angles, (30 * arcsec)^2 * eye(2));
+            tc.verifyEqual(covariances.star_tracker_angles, (30 * arcsec)^2 * eye(2));
+            tc.verifyEqual(covariances.camera_angular_size, 2 * (30 * arcsec)^2);
+            tc.verifyEqual(covariances.dsn_range, (10 * meter)^2);
+            tc.verifyEqual(covariances.dsn_range_rate, (1e-2 * meter_per_sec)^2);
+            tc.verifyEqual(covariances.crosslink_range, (5 * meter)^2);
+            tc.verifyEqual(covariances.crosslink_range_rate, (0.1 * meter_per_sec)^2);
+            tc.verifyEqual(covariances.gnss_position, (10 * meter)^2 * eye(3));
+        end
+
         function measurementGroupsOnlyValidateRequestedCovariances(tc, state)
             [h, dh_dstate] = coa.meas.measurementModels(state, 2^7);
             tc.verifySize(h, [9, 1]);
