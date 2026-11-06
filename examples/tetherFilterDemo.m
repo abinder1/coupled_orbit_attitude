@@ -660,7 +660,7 @@ function plotMeasurementHistory(monte_carlo, config, value_field, covariance_fie
         end
         yline(ax, [-3, 3], 'k--');
         for r = 1:numel(rows)
-            plot(ax, time, reference(rows(r), :), '-o', 'Color', colors(r, :), ...
+            plot(ax, time, reference(rows(r), :), 'o', 'Color', colors(r, :), ...
                  'LineWidth', 1, 'MarkerSize', 3);
         end
         grid(ax, 'on');
