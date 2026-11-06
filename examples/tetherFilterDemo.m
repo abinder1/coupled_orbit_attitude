@@ -29,6 +29,7 @@ config = demoConfig();
 preparePlotOutput(config);
 [initial_state, initial_covariance, initial_factor] = makeInitialEstimate(config);
 scenario = propagateScenario(initial_state, config);
+plotTruthTrajectory(scenario, config);
 % Truth is the nominal initial condition; each trial's estimate is a sample
 % drawn around it with the initial covariance.
 filter_run = runFilter(scenario, ...
@@ -99,13 +100,14 @@ function config = demoConfig()
     %   "off"  - skip the plot, including its data preparation
     %   "save" - render hidden, write an image to plot_output_folder, close it
     %   "show" - display on screen and leave open
-    config.plot_modes = struct('prediction_history', "show", ...
-                               'anees', "show", ...
-                               'rmse', "show", ...
-                               'innovations', "show", ...
-                               'residuals', "show", ...
-                               'corner', "show", ...
-                               'relative_corner', "show");
+    config.plot_modes = struct('prediction_history', "off", ...
+                               'trajectory', "show", ...
+                               'anees', "off", ...
+                               'rmse', "off", ...
+                               'innovations', "off", ...
+                               'residuals', "off", ...
+                               'corner', "off", ...
+                               'relative_corner', "off");
     config.plot_output_folder = fullfile(fileparts(mfilename('fullpath')), ...
                                          '..', 'runs', 'tetherFilterDemo');
     config.plot_file_format = "png";
@@ -1023,10 +1025,75 @@ function plotSignedComponent(ax, time, error, sigma, config, color)
     grid(ax, 'on');
 end
 
+function plotTruthTrajectory(scenario, config)
+    % Plot the nominal truth paths, payload-to-catch range, and inbound speed.
+    if plotMode(config, 'trajectory') == "off"
+        return
+    end
+
+    sample_count = config.measurement_count * ...
+                   config.plot_samples_per_interval + 1;
+    sample_time = linspace(0, config.duration, sample_count);
+    truth = deval(scenario.truth_solution, sample_time);
+    position = truth(1:9, :) * config.length_scale;
+    velocity = truth(10:18, :) * config.length_scale / config.time_scale;
+    time_minutes = sample_time * config.time_scale / 60;
+
+    relative_position = position(7:9, :) - position(4:6, :);
+    relative_velocity = velocity(7:9, :) - velocity(4:6, :);
+    payload_to_catch_range = vecnorm(relative_position);
+    inbound_speed = -sum(relative_position .* relative_velocity, 1) ./ ...
+                    payload_to_catch_range * 1000;
+
+    fig = newFigure(config, 'trajectory', 'Name', ...
+                    'Truth motion and payload range', 'Color', 'w', ...
+                    'Position', [60, 60, 1200, 720]);
+    layout = tiledlayout(fig, 2, 2, 'TileSpacing', 'compact', ...
+                         'Padding', 'compact');
+
+    trajectory_axes = nexttile(layout, 1, [2, 1]);
+    hold(trajectory_axes, 'on');
+    colors = lines(3);
+    bodies = {1:3, 4:6, 7:9};
+    names = ["Counterweight (m1)", "Catch mechanism (m2)", ...
+             "Payload (m3)"];
+    for body = 1:numel(bodies)
+        rows = bodies{body};
+        plot3(trajectory_axes, position(rows(1), :), position(rows(2), :), ...
+              position(rows(3), :), 'Color', colors(body, :), ...
+              'LineWidth', 1.2);
+    end
+    grid(trajectory_axes, 'on');
+    axis(trajectory_axes, 'equal');
+    view(trajectory_axes, 3);
+    xlabel(trajectory_axes, 'X [km]');
+    ylabel(trajectory_axes, 'Y [km]');
+    zlabel(trajectory_axes, 'Z [km]');
+    title(trajectory_axes, 'Truth trajectories in the rotating frame');
+    legend(trajectory_axes, names, 'Location', 'best');
+
+    range_axes = nexttile(layout, 2);
+    plot(range_axes, time_minutes, payload_to_catch_range, 'LineWidth', 1.2);
+    grid(range_axes, 'on');
+    ylabel(range_axes, 'Range |r_3 - r_2| [km]');
+    title(range_axes, 'Payload (m3) to catch mechanism (m2)');
+
+    speed_axes = nexttile(layout, 4);
+    plot(speed_axes, time_minutes, inbound_speed, 'LineWidth', 1.2);
+    yline(speed_axes, 0, 'k-', 'HandleVisibility', 'off');
+    grid(speed_axes, 'on');
+    xlabel(speed_axes, 'Time [min]');
+    ylabel(speed_axes, 'Inbound speed [m/s]');
+    title(speed_axes, 'Positive when closing');
+
+    sgtitle(layout, 'Truth motion and payload-to-catch range history');
+    finishFigure(fig, config, 'trajectory');
+end
+
 %% Plot output control
 function keys = plotKeys()
     % Every plot that can be switched between "off", "save", and "show".
-    keys = ["prediction_history", "anees", "rmse", "innovations", ...
+    keys = ["prediction_history", "trajectory", "anees", "rmse", "innovations", ...
             "residuals", "corner", "relative_corner"];
 end
 
