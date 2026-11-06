@@ -100,6 +100,20 @@ only code under `toolbox/` is measured.
 git-ignored. `buildtool clean` deletes only the two XML result files; the
 report files remain until the next run of the script overwrites them.
 
+## Tether initial state
+
+`coa.orbit.tetherInitialState(com_state, length_nd, mass_2_fraction, ...
+spin_rate_nd, length_dot, direction)` constructs the rotating-frame state
+`[p1; p2; v1; v2]` from a center-of-mass state. The direction is a unit vector
+from the center of mass toward body 1 and is used without normalization. The
+spin is inertial about +z; the nondimensional frame rotates about +z at rate 1.
+See the function help for the input conventions.
+
+`coa.orbit.tetherFrame(relative_position, relative_velocity)` constructs a
+right-handed tether-aligned orientation using relative vectors in the same
+coordinate frame. Its rows are the frame axes; it does not transform velocities
+or covariances or add rotating-frame transport terms.
+
 ## Measurement models
 
 The `coa.meas` package models measurements for the 18-element Cartesian state
@@ -131,6 +145,10 @@ selected rows/groups; covariance fields are required only for selected groups
 and must be finite, real, symmetric, positive definite matrices of the
 documented size.
 
+`[groups, angle_rows] = coa.meas.measurementGroups(mask)` returns the selected
+group names, group indices, and stacked row indices, plus the angular rows to
+wrap during an EKF update. It uses the same group order as `measurementModels`.
+
 `coa.meas.measurementCovariances(length_scale, speed_scale)` supplies nominal
 measurement-noise covariances using characteristic scales in km and km/s.
 Both scales must be finite and positive. These covariances describe sample
@@ -156,6 +174,17 @@ innovation, innovation covariance, gain, and post-fit residual and its
 covariance, which are the inputs to normalized-innovation-squared (NIS) health
 checks. See `help coa.filter.ekfUpdate` for the full contract, and
 `derivations/ekf_health_diagnostics.tex` for the diagnostics.
+
+`coa.filter.computeNees(errors, covariances, blocks)` computes normalized
+estimation error squared for each trial, update, and caller-defined state
+block. Errors have shape `[run, update, state]`; covariances have shape
+`[state, state, update, run]` and use each trial's own covariance. Each block
+is a struct with a `rows` vector of state indices. Selected covariance blocks
+must be nonsingular.
+
+`coa.filter.meanChiSquareBounds(run_count, dof, confidence)` returns two-sided
+acceptance bounds for the mean of independent chi-square statistics, such as
+ANEES or ANIS. Degrees of freedom may be supplied as a scalar or matrix.
 
 Run `examples/tetherFilterDemo.m` in MATLAB for an example that propagates the
 tethered three-body estimate and covariance for 24 hours, applying 72 noisy
