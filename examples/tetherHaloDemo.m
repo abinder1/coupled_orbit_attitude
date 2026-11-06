@@ -88,8 +88,8 @@ cases = struct('rate_ms', num2cell(rates_ms));
 for k = 1:numel(cases)
     length_dot = cases(k).rate_ms / 1000 * T_star / L_star;  % nondimensional
 
-    sv_0 = tetherInitialState(halo_IC, L / L_star, eta, ...
-                              spin_rate * T_star, length_dot, lhat_0);
+    sv_0 = coa.orbit.tetherInitialState(halo_IC, L / L_star, eta, ...
+                                        spin_rate * T_star, length_dot, lhat_0);
 
     ode_func = @(t, sv) tetherDynamics(t, sv, eta, length_dot, accel_fn, ...
                                        spring_damper);
@@ -132,30 +132,6 @@ if save_figures
 end
 
 %% Local functions: dynamics and initial conditions
-function sv_0 = tetherInitialState(com_state, length_nd, eta, spin_rate_nd, ...
-                                   length_dot, lhat_0)
-    % Initial state [p_cw; p_cm; v_cw; v_cm] for a tether whose center of mass
-    % starts at com_state = [p; v] in the rotating frame.
-    omega_frame = [0; 0; 1];            % Rotating-frame angular velocity
-    spin = spin_rate_nd * [0; 0; 1];    % Tether's inertial angular velocity
-
-    % The CW is a distance eta * L from the center of mass on the +lhat side and
-    % the CM is (1 - eta) * L on the other side.
-    rel_cw = lhat_0 * (eta * length_nd);
-    rel_cm = -lhat_0 * ((1 - eta) * length_nd);
-
-    % Rigid spin as seen in the rotating frame, plus the extension velocity of
-    % each mass. The extension terms leave the center of mass unaffected.
-    spin_rel = spin - omega_frame;
-    vel_cw = cross(spin_rel, rel_cw) + eta * length_dot * lhat_0;
-    vel_cm = cross(spin_rel, rel_cm) - (1 - eta) * length_dot * lhat_0;
-
-    com_pos = com_state(1:3);
-    com_vel = com_state(4:6);
-
-    sv_0 = [com_pos + rel_cw; com_pos + rel_cm; com_vel + vel_cw; com_vel + vel_cm];
-end
-
 function sv_dot = tetherDynamics(t, sv, eta, length_dot, accel_fn, spring_damper)
     % Time derivative of sv = [p_cw; p_cm; v_cw; v_cm]. The tether model returns
     % the stacked accelerations [a_cw; a_cm]: the critically damped spring-damper

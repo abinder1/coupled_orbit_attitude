@@ -126,9 +126,9 @@ function [state, covariance, factor] = makeInitialEstimate(config)
     tether_length = config.tether_length_km / config.length_scale;
     spin_rate = config.spin_rate * config.time_scale;
     tether_rate = config.tether_length_rate;
-    tether_state = tetherInitialState(config.halo_state, tether_length, ...
-                                      config.mass_2_fraction, spin_rate, ...
-                                      tether_rate, config.tether_direction);
+    tether_state = coa.orbit.tetherInitialState(config.halo_state, tether_length, ...
+                                                config.mass_2_fraction, spin_rate, ...
+                                                tether_rate, config.tether_direction);
     state = rendezvousInitialState(tether_state, config, accel_fn);
 
     sigma = config.initial_sigma;
@@ -1173,21 +1173,4 @@ function state = propagateSingleBody(state_0, duration, accel_fn)
     solution = ode113(rhs, [0, duration], state_0, ...
                       odeset('AbsTol', 1e-10, 'RelTol', 1e-10));
     state = solution.y(:, end);
-end
-
-function state = tetherInitialState(com_state, length_nd, mass_2_fraction, ...
-                                    spin_rate_nd, length_dot, direction)
-    % Initialize [p1; p2; v1; v2] around the tether center of mass.
-    frame_rate = [0; 0; 1];
-    relative_spin = spin_rate_nd * [0; 0; 1] - frame_rate;
-
-    offset_1 = direction * (mass_2_fraction * length_nd);
-    offset_2 = -direction * ((1 - mass_2_fraction) * length_nd);
-    velocity_1 = cross(relative_spin, offset_1) + ...
-                 mass_2_fraction * length_dot * direction;
-    velocity_2 = cross(relative_spin, offset_2) - ...
-                 (1 - mass_2_fraction) * length_dot * direction;
-
-    state = [com_state(1:3) + offset_1; com_state(1:3) + offset_2; ...
-             com_state(4:6) + velocity_1; com_state(4:6) + velocity_2];
 end
