@@ -1,0 +1,405 @@
+\documentclass[11pt]{article}
+
+%%%%%%%%%%%%% Package imports %%%%%%%%%%%%%
+% Uses Latin Modern + T1 when available; falls back to default fonts otherwise.
+\IfFileExists{lmodern.sty}%
+  {\usepackage[T1]{fontenc}\usepackage{lmodern}\usepackage{microtype}}%
+  {\usepackage[T1]{fontenc}\usepackage[expansion=false]{microtype}}
+\usepackage[backend=biber, style=numeric]{biblatex}
+\usepackage{enumitem}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{bm}
+\usepackage{booktabs}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage[hidelinks]{hyperref}
+
+\addbibresource{iekf_notes.bib}
+
+%%%%%%%%%%%%% Macro definitions %%%%%%%%%%%%%
+\setlist{itemsep=2pt,topsep=4pt}
+
+\newcommand{\x}{\bm{x}}
+\newcommand{\y}{\bm{y}}
+\newcommand{\uvec}{\bm{u}}
+\newcommand{\w}{\bm{w}}
+\newcommand{\vvec}{\bm{v}}
+\newcommand{\dyn}{\bm{f}}
+\newcommand{\meas}{\bm{h}}
+\newcommand{\F}{\bm{F}}
+\newcommand{\Hm}{\bm{H}}
+\newcommand{\K}{\bm{K}}
+\newcommand{\Pm}{\bm{P}}
+\newcommand{\Q}{\bm{Q}}
+\newcommand{\R}{\bm{R}}
+\newcommand{\Sm}{\bm{S}}
+\newcommand{\I}{\bm{I}}
+\newcommand{\xbar}{\bar{\x}}
+\newcommand{\xhat}{\hat{\x}}
+\newcommand{\Pbar}{\bar{\Pm}}
+\newcommand{\Phat}{\hat{\Pm}}
+\newcommand{\inn}{\bm{\nu}}
+\newcommand{\Normal}{\mathcal{N}}
+\newcommand{\iter}[1]{^{(#1)}}
+
+%%%%%%%%%%%%% Title card content %%%%%%%%%%%%%
+\title{The Iterated Extended Kalman Filter:\\
+Equations, Trade-offs, Diagnostics, and Use on Real Data}
+\author{Andrew\\ \small Director of Research \& Development, Terminus Stratospherics}
+\date{\today}
+
+%%%%%%%%%%%%% Begin document %%%%%%%%%%%%%
+\begin{document}
+\maketitle
+\tableofcontents
+
+%======================================================================
+\section{Model Setup}
+
+Consider the discrete-time nonlinear system with additive Gaussian noise
+\begin{align}
+  \x_k &= \dyn(\x_{k-1}, \uvec_{k-1}) + \w_{k-1}, & \w_{k-1} &\sim \Normal(\bm{0}, \Q_{k-1}), \label{eq:dyn}\\
+  \y_k &= \meas(\x_k) + \vvec_k, & \vvec_k &\sim \Normal(\bm{0}, \R_k), \label{eq:meas}
+\end{align}
+with $\x \in \mathbb{R}^n$ and $\y \in \mathbb{R}^m$. If the dynamics are continuous,
+$\dyn$ denotes the integrated flow over $[t_{k-1}, t_k]$ and the Jacobian $\F$ below is the
+state transition matrix $\boldsymbol{\Phi}(t_k, t_{k-1})$, obtained by integrating
+$\dot{\boldsymbol{\Phi}} = \mathbf{A}(t)\boldsymbol{\Phi}$, $\boldsymbol{\Phi}(t_{k-1},t_{k-1}) = \I$,
+alongside the state.
+
+%======================================================================
+\section{Prediction (Time Update)}
+
+The IEKF prediction step is identical to that of the EKF.
+
+\paragraph{State propagation.}
+\begin{equation}
+  \xbar_k = \dyn(\xhat_{k-1}, \uvec_{k-1}).
+\end{equation}
+
+\paragraph{Dynamics Jacobian.}
+\begin{equation}
+  \F_{k-1} = \left.\frac{\partial \dyn}{\partial \x}\right|_{\xhat_{k-1}}.
+\end{equation}
+
+\paragraph{Covariance propagation.}
+\begin{equation}
+  \Pbar_k = \F_{k-1}\Phat_{k-1}\F_{k-1}^\top + \Q_{k-1}.
+\end{equation}
+
+The standard IEKF does \emph{not} iterate the prediction step; see
+Section~\ref{sec:variants} for variants that do.
+
+%======================================================================
+\section{Iterated Measurement Update}
+
+\subsection{Origin: MAP Estimation via Gauss--Newton}
+
+The EKF update linearizes $\meas$ once, about the prior $\xbar_k$. The IEKF instead seeks the
+maximum a posteriori (MAP) estimate under the Gaussian prior and Gaussian likelihood, i.e.\ the
+minimizer of
+\begin{equation}
+  J(\x) = \tfrac{1}{2}\bigl(\y_k - \meas(\x)\bigr)^\top \R_k^{-1}\bigl(\y_k - \meas(\x)\bigr)
+        + \tfrac{1}{2}(\x - \xbar_k)^\top \Pbar_k^{-1}(\x - \xbar_k).
+  \label{eq:cost}
+\end{equation}
+Bell and Cathey~\cite{bell1993} showed that the IEKF iteration is exactly the
+Gauss--Newton method applied to~\eqref{eq:cost}: the filter relinearizes $\meas$ about
+successively better estimates of the posterior mode.
+
+\subsection{The Iteration}
+
+Initialize at the prior,
+\begin{equation}
+  \x\iter{0} = \xbar_k ,
+\end{equation}
+and for $i = 0, 1, 2, \dots$ perform the following.
+
+\begin{enumerate}[label=\textbf{Step \arabic*.}, leftmargin=*, itemsep=1ex]
+  \item \textbf{Relinearize} the measurement model at the current iterate:
+  \begin{equation}
+    \Hm\iter{i} = \left.\frac{\partial \meas}{\partial \x}\right|_{\x\iter{i}}.
+  \end{equation}
+
+  \item \textbf{Innovation covariance} (the prior covariance is fixed; only $\Hm$ changes):
+  \begin{equation}
+    \Sm\iter{i} = \Hm\iter{i}\Pbar_k\Hm^{(i)\top} + \R_k .
+  \end{equation}
+
+  \item \textbf{Gain:}
+  \begin{equation}
+    \K\iter{i} = \Pbar_k\Hm^{(i)\top}\bigl(\Sm\iter{i}\bigr)^{-1}.
+  \end{equation}
+
+  \item \textbf{State iterate} (the key equation):
+  \begin{equation}
+    \boxed{\;
+      \x\iter{i+1} = \xbar_k + \K\iter{i}\Bigl[\y_k - \meas\bigl(\x\iter{i}\bigr)
+                     - \Hm\iter{i}\bigl(\xbar_k - \x\iter{i}\bigr)\Bigr]
+    \;}
+    \label{eq:iekf-update}
+  \end{equation}
+  The correction term $-\Hm\iter{i}(\xbar_k - \x\iter{i})$ is what makes this Gauss--Newton
+  rather than a naive re-application of the EKF update: every iterate is anchored to the prior
+  $\xbar_k$, not to the previous iterate. For $i = 0$ the term vanishes and the EKF update is
+  recovered exactly.
+
+  \item \textbf{Convergence check:} stop when
+  \begin{equation}
+    \bigl\|\x\iter{i+1} - \x\iter{i}\bigr\| < \epsilon
+    \quad\text{or}\quad i + 1 = i_{\max}.
+  \end{equation}
+  A scale-aware alternative is the Mahalanobis step size
+  $\Delta^\top \Pbar_k^{-1} \Delta < \epsilon$ with $\Delta = \x\iter{i+1} - \x\iter{i}$,
+  which avoids mixing units (e.g.\ km and rad) in a single norm.
+\end{enumerate}
+
+\subsection{Final Posterior}
+
+Let $N$ denote the converged iterate. Then
+\begin{equation}
+  \xhat_k = \x\iter{N}.
+\end{equation}
+Recompute $\Hm$ and $\K$ at $\x\iter{N}$ and update the covariance in Joseph form for
+numerical robustness:
+\begin{equation}
+  \Phat_k = (\I - \K\Hm)\,\Pbar_k\,(\I - \K\Hm)^\top + \K\R_k\K^\top .
+  \label{eq:joseph}
+\end{equation}
+This is the inverse of the Gauss--Newton Hessian approximation of $J$ at the mode, i.e.\ a
+Laplace-type approximation of the posterior covariance.
+
+\begin{algorithm}[htbp]
+\caption{IEKF measurement update (with optional damping)}
+\label{alg:iekf}
+\begin{algorithmic}[1]
+\Require Prior $\xbar_k$, $\Pbar_k$; measurement $\y_k$; $\R_k$; tolerance $\epsilon$; $i_{\max}$
+\State $\x\iter{0} \gets \xbar_k$
+\For{$i = 0, 1, \dots, i_{\max}-1$}
+  \State $\Hm\iter{i} \gets \partial\meas/\partial\x\,|_{\x\iter{i}}$
+  \State $\Sm\iter{i} \gets \Hm\iter{i}\Pbar_k\Hm^{(i)\top} + \R_k$
+  \State $\K\iter{i} \gets \Pbar_k\Hm^{(i)\top}(\Sm\iter{i})^{-1}$
+  \State $\x_{\mathrm{GN}} \gets \xbar_k + \K\iter{i}\bigl[\y_k - \meas(\x\iter{i}) - \Hm\iter{i}(\xbar_k - \x\iter{i})\bigr]$
+  \State $\Delta \gets \x_{\mathrm{GN}} - \x\iter{i}$
+  \State $\alpha \gets 1$
+  \While{$J(\x\iter{i} + \alpha\Delta) > J(\x\iter{i})$ \textbf{and} $\alpha > \alpha_{\min}$} \Comment{optional backtracking}
+    \State $\alpha \gets \alpha/2$
+  \EndWhile
+  \State $\x\iter{i+1} \gets \x\iter{i} + \alpha\Delta$
+  \If{$\Delta^\top\Pbar_k^{-1}\Delta < \epsilon$} \textbf{break} \EndIf
+\EndFor
+\State $\xhat_k \gets \x\iter{i+1}$; recompute $\Hm$, $\K$ at $\xhat_k$
+\State $\Phat_k \gets (\I - \K\Hm)\Pbar_k(\I - \K\Hm)^\top + \K\R_k\K^\top$
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Damped / Line-Search IEKF}
+
+Pure Gauss--Newton can overshoot or diverge when the prior is poor or $\meas$ is strongly
+curved. The damped IEKF~\cite{skoglund2015} computes the full Gauss--Newton step
+\begin{equation}
+  \Delta\iter{i} = \x_{\mathrm{GN}}\iter{i+1} - \x\iter{i}
+\end{equation}
+and takes a partial step
+\begin{equation}
+  \x\iter{i+1} = \x\iter{i} + \alpha_i\,\Delta\iter{i}, \qquad \alpha_i \in (0, 1],
+\end{equation}
+with $\alpha_i$ chosen by backtracking until $J$ decreases. A Levenberg--Marquardt variant,
+which inflates the prior-information term, achieves the same effect. The modification is cheap
+and turns the IEKF from ``usually better'' into ``reliably no worse'' than the EKF.
+
+\subsection{Attitude and Other Manifold States}
+
+For states containing quaternions or rotation matrices, iterate in the \emph{error state}.
+The prior term becomes the manifold difference $\x\iter{i} \boxminus \xbar_k$, so in
+\eqref{eq:iekf-update} the quantity $(\xbar_k - \x\iter{i})$ is replaced by
+$-(\x\iter{i} \boxminus \xbar_k)$, and each update is retracted with $\boxplus$.
+Strictly, $\Pbar_k$ should also be transported to the tangent space at the new iterate.
+This correction is often small but matters for large attitude corrections; in coupled
+orbit--attitude problems, handling it properly is typically more important than the
+iteration count.
+
+%======================================================================
+\section{Related Variants}
+\label{sec:variants}
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{@{}lp{0.5\textwidth}@{}}
+\toprule
+\textbf{Variant} & \textbf{What is iterated} \\
+\midrule
+IEKF (this document) & Measurement linearization only \\
+Iterated EKS / Gauss--Newton smoother & Whole trajectory, both $\dyn$ and $\meas$ (batch MAP) \\
+Iterated UKF / IPLF & Statistical (sigma-point) linearization of $\meas$ about the current posterior \\
+Damped IEKF & Measurement linearization with line search or LM damping \\
+\bottomrule
+\end{tabular}
+\caption{IEKF and related iterated estimators.}
+\end{table}
+
+%======================================================================
+\section{Advantages and Disadvantages}
+
+\subsection{Advantages}
+\begin{itemize}
+  \item \textbf{Better handling of measurement nonlinearity} than the EKF (range/bearing,
+        angles-only, star-tracker/line-of-sight, Doppler). Reduces linearization bias in the
+        update.
+  \item \textbf{Clear optimization interpretation.} Each update is the MAP estimate given the
+        Gaussian prior, which provides principled tools: cost monotonicity checks, damping, and
+        convergence tests.
+  \item \textbf{Same ingredients as the EKF.} No new Jacobians, no sigma points; usually a
+        small code change.
+  \item \textbf{Adaptive cost.} Mildly nonlinear updates converge in one or two iterations, so
+        extra computation is spent only where nonlinearity matters.
+  \item \textbf{Robust to low-to-high information transitions}, such as the first good
+        measurement after a long coast, when the prior is large relative to $\R$---precisely
+        where the EKF tends to diverge.
+\end{itemize}
+
+\subsection{Disadvantages}
+\begin{itemize}
+  \item \textbf{No help with dynamics nonlinearity.} Prediction remains a first-order
+        covariance propagation; long propagation arcs or strongly nonlinear dynamics can still
+        corrupt $\Pbar_k$.
+  \item \textbf{Higher, variable cost} per update (multiple evaluations of $\meas$, $\Hm$, and
+        $\Sm^{-1}$). Awkward under hard real-time budgets; cap $i_{\max}$.
+  \item \textbf{Undamped Gauss--Newton can diverge or oscillate} when the prior is badly
+        wrong, potentially performing worse than the EKF.
+  \item \textbf{Covariance is still a local linearization}, and can be overconfident when the
+        posterior is non-Gaussian, skewed, or banana-shaped (e.g.\ angles-only orbit
+        determination).
+  \item \textbf{Unimodal.} The filter converges to \emph{a} mode and cannot represent
+        ambiguity (multiple solutions, data-association uncertainty).
+  \item \textbf{Little benefit when $\R$ dominates} $\Hm\Pbar\Hm^\top$: the update is small,
+        linearization error negligible, and the extra computation is wasted.
+  \item \textbf{Sensitive to errors in $\meas$.} Iterating toward a biased measurement model fits
+        the bias more confidently.
+\end{itemize}
+
+%======================================================================
+\section{Diagnostics for Filter Health}
+
+\subsection{Innovation-Based Tests (No Truth Required)}
+
+The innovation (pre-fit residual) and its predicted covariance, evaluated at the prior, are
+\begin{equation}
+  \inn_k = \y_k - \meas(\xbar_k), \qquad
+  \Sm_k = \Hm_k\Pbar_k\Hm_k^\top + \R_k .
+\end{equation}
+For a healthy filter, $\inn_k$ is zero-mean, white, and has covariance $\Sm_k$. Three tests
+check these properties.
+
+\paragraph{Normalized Innovation Squared (NIS).}
+\begin{equation}
+  \epsilon_{\nu,k} = \inn_k^\top \Sm_k^{-1}\inn_k \sim \chi^2_m .
+\end{equation}
+Over a window of $N$ steps, $\sum_{k} \epsilon_{\nu,k} \sim \chi^2_{Nm}$, so the time-averaged
+NIS should lie within the two-sided 95\% bounds
+\begin{equation}
+  \frac{1}{N}\Bigl[\chi^2_{Nm}(0.025),\; \chi^2_{Nm}(0.975)\Bigr].
+\end{equation}
+\begin{itemize}
+  \item NIS persistently too high: the filter is overconfident ($\Q$ or $\R$ too small, or the
+        model is wrong).
+  \item NIS persistently too low: the filter is too conservative.
+\end{itemize}
+
+\paragraph{Whiteness (autocorrelation) test.}
+For the normalized innovation sequence, compute the sample autocorrelation $\hat\rho(j)$ for
+lags $j \ge 1$. Approximately 95\% of values should satisfy
+\begin{equation}
+  |\hat\rho(j)| \le \frac{1.96}{\sqrt{N}} .
+\end{equation}
+Correlated innovations indicate unmodeled dynamics, colored noise, or a mistuned $\Q$.
+
+\paragraph{Bias test.}
+The sample mean of each normalized innovation component should be approximately zero. A
+persistent offset suggests a sensor bias that should be estimated as an additional state.
+
+\subsection{Truth-Based Tests (Simulation and Monte Carlo)}
+
+\paragraph{Normalized Estimation Error Squared (NEES).}
+\begin{equation}
+  \epsilon_{x,k} = (\x_k - \xhat_k)^\top \Phat_k^{-1} (\x_k - \xhat_k) \sim \chi^2_n .
+\end{equation}
+Averaging over $M$ Monte Carlo runs gives the ANEES, which is checked against
+$\chi^2_{Mn}/M$ bounds. This is the gold-standard consistency test~\cite{barshalom2001}.
+
+\paragraph{Error versus $\pm 3\sigma$ envelopes.}
+Plot each state's estimation error against $\pm 3\sigma_j$, $\sigma_j = \sqrt{\hat P_{jj}}$.
+Roughly 99.7\% of errors should lie inside the envelope, and the envelope should not be
+grossly loose.
+
+\paragraph{RMSE versus reported $\sigma$} across Monte Carlo runs.
+
+\subsection{IEKF-Specific Diagnostics}
+\begin{itemize}
+  \item \textbf{Iterations per update.} One to three is typical. Frequently hitting $i_{\max}$
+        signals a poor prior, strong nonlinearity, or a bad measurement.
+  \item \textbf{Cost monotonicity.} $J(\x\iter{i})$ should decrease at every iteration;
+        increases indicate that damping is needed.
+  \item \textbf{EKF-versus-IEKF update gap}, $\|\x\iter{N} - \x\iter{1}\|$ in the Mahalanobis
+        metric. A large gap flags updates where linearization mattered and where the
+        covariance is least trustworthy.
+  \item \textbf{Post-fit residuals} $\y_k - \meas(\xhat_k)$ at the converged iterate, compared
+        against $\R_k$. A post-fit/pre-fit ratio near unity for every measurement suggests the
+        filter is not learning from the data.
+\end{itemize}
+
+\subsection{Numerical and Structural Health}
+\begin{itemize}
+  \item \textbf{Covariance sanity:} symmetry ($\|\Pm - \Pm^\top\|$), positive definiteness
+        (Cholesky succeeds; $\lambda_{\min} > 0$), and condition number. Consider a square-root
+        or UD formulation if conditioning degrades.
+  \item \textbf{Observability:} rank and conditioning of the observability Gramian or
+        accumulated information matrix. A collapsing $\sigma$ along an unobservable direction is
+        a red flag.
+  \item \textbf{Outlier gating:} reject or down-weight measurements with
+        $\epsilon_{\nu,k} > \chi^2_m(1 - \alpha)$, and log the rejection rate, which is itself a
+        diagnostic.
+\end{itemize}
+
+%======================================================================
+\section{Use on Real Data}
+
+The IEKF is widely used operationally, including in orbit determination (range, angles,
+Doppler), star-tracker/gyro attitude estimation, GNSS/INS integration, radar and
+bearings-only tracking, and visual-inertial odometry and SLAM, where many back ends are
+effectively iterated EKFs on a manifold. Real data does, however, change how the filter is
+validated and tuned.
+
+\begin{itemize}
+  \item \textbf{No truth, hence no NEES.} The primary health checks become the
+        innovation-based tests: NIS, whiteness, bias, and post-fit residuals. Supplement these
+        with an independent reference where available (precise ephemerides, a higher-grade
+        sensor, survey points).
+  \item \textbf{Validate in simulation first.} Tune the filter and pass NEES/NIS tests in Monte
+        Carlo using a realistic truth model, including biases, colored noise, and model
+        mismatch. Then replay real data and confirm the NIS statistics still hold.
+  \item \textbf{Account for real-world error sources} the textbook model omits:
+  \begin{itemize}
+    \item sensor biases and scale factors (augment the state);
+    \item time-tag misalignment;
+    \item colored or heavy-tailed noise (shaping filters, or robust Huber weighting in $J$);
+    \item outliers (gating);
+    \item unmodeled dynamics (tune $\Q$, or use consider parameters).
+  \end{itemize}
+  \item \textbf{Tune $\Q$ and $\R$ using NIS.} If the innovation statistics are consistent and
+        white, the filter's reported uncertainty is credible---the practical goal on real data.
+  \item \textbf{Cross-check against a batch or smoother solution.} A Gauss--Newton batch
+        least-squares fit or a smoother over the same data localizes where the filter's
+        assumptions break down.
+  \item \textbf{Respect the compute budget.} In real-time use, cap $i_{\max}$ and use damping
+        so that a pathological measurement degrades gracefully to roughly EKF behavior rather
+        than stalling or diverging.
+\end{itemize}
+
+%======================================================================
+\nocite{sarkka2013}
+\printbibliography
+
+\end{document}
