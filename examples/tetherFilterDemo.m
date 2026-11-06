@@ -785,7 +785,9 @@ function relative = relativeStateDistribution(endpoint, config)
     % frame of the reference run's estimate at the endpoint, in meters and mm/s.
     % d is an affine (here linear) function of the state, so the final-time errors
     % and covariance map exactly: e_d = M e, P_d = M P M'. No new samples needed.
-    frame = tetherFrame(endpoint.reference_state);
+    state = endpoint.reference_state;
+    frame = coa.orbit.tetherFrame(state(4:6) - state(1:3), ...
+                                  state(13:15) - state(10:12));
 
     difference = zeros(6, 18);
     difference(1:3, 4:6) = -eye(3);
@@ -804,17 +806,6 @@ function relative = relativeStateDistribution(endpoint, config)
     relative.names = ["\Delta r_{e1}", "\Delta r_{e2}", "\Delta r_{e3}", ...
                       "\Delta v_{e1}", "\Delta v_{e2}", "\Delta v_{e3}"];
     relative.units = ["m", "m", "m", "mm/s", "mm/s", "mm/s"];
-end
-
-function frame = tetherFrame(state)
-    % Rows are the frame axes in the state's coordinates: e1 along r2 - r1,
-    % e3 along (r2 - r1) x (v2 - v1), and e2 = e3 x e1 completing the triad.
-    tether = state(4:6) - state(1:3);
-    relative_velocity = state(13:15) - state(10:12);
-    normal = cross(tether, relative_velocity);
-    e1 = tether / norm(tether);
-    e3 = normal / norm(normal);
-    frame = [e1, cross(e3, e1), e3]';
 end
 
 function reportRelativeState(monte_carlo, config)
