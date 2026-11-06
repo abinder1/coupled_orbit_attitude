@@ -35,7 +35,7 @@ classdef Visualization
         end
 
         function plotPredictionHistory(history, config)
-            % Plot signed XYZ errors and shaded componentwise +/-3-sigma bounds.
+            % Plot XYZ error magnitudes and componentwise 3-sigma bounds.
             import tetherFilterDemoSupport.*
             if PlotOutput.plotMode(config, 'prediction_history') == "off"
                 return
@@ -43,16 +43,9 @@ classdef Visualization
             time_minutes = history.time * config.time_scale / 60;
             component_colors = lines(3);
             component_names = ["x", "y", "z"];
-            position_limit = ...
-                Visualization.symmetricPlotLimit(history.position_error, ...
-                                                 history.position_sigma);
-            velocity_limit = ...
-                Visualization.symmetricPlotLimit(history.velocity_error, ...
-                                                 history.velocity_sigma);
-
             for body = 1:3
                 body_rows = 3 * (body - 1) + (1:3);
-                figure_name = config.body_names(body) + " signed errors";
+                figure_name = config.body_names(body) + " error magnitudes";
                 fig = PlotOutput.newFigure(config, 'prediction_history', 'Name', ...
                                            figure_name, 'Color', 'w');
                 layout = tiledlayout(3, 2, 'TileSpacing', 'compact', ...
@@ -63,63 +56,57 @@ classdef Visualization
                     position_axes = nexttile(layout, 2 * component - 1);
                     position_error = history.position_error(row, :);
                     position_sigma = history.position_sigma(row, :);
-                    Visualization.plotSignedComponent( ...
-                                                      position_axes, time_minutes, ...
-                                                      position_error, ...
-                                                      position_sigma, config, ...
-                                                      component_colors(component, :));
-                    ylim(position_axes, position_limit);
+                    Visualization.plotErrorMagnitude( ...
+                                                     position_axes, time_minutes, ...
+                                                     position_error, ...
+                                                     position_sigma, config, ...
+                                                     component_colors(component, :));
                     title(position_axes, component_names(component) + " position");
-                    ylabel(position_axes, 'Position error [km]');
+                    ylabel(position_axes, '|Position error| [km]');
 
                     velocity_axes = nexttile(layout, 2 * component);
                     velocity_error = history.velocity_error(row, :);
                     velocity_sigma = history.velocity_sigma(row, :);
-                    Visualization.plotSignedComponent( ...
-                                                      velocity_axes, time_minutes, ...
-                                                      velocity_error, ...
-                                                      velocity_sigma, config, ...
-                                                      component_colors(component, :));
-                    ylim(velocity_axes, velocity_limit);
+                    Visualization.plotErrorMagnitude( ...
+                                                     velocity_axes, time_minutes, ...
+                                                     velocity_error, ...
+                                                     velocity_sigma, config, ...
+                                                     component_colors(component, :));
                     title(velocity_axes, component_names(component) + " velocity");
-                    ylabel(velocity_axes, 'Velocity error [m/s]');
+                    ylabel(velocity_axes, '|Velocity error| [m/s]');
                 end
 
                 xlabel(layout, 'Time [min]');
                 title(layout, config.body_names(body) + ...
-                      " signed component errors with shaded \pm3\sigma bounds");
+                      " component |error| (color) and 3\sigma (shaded)");
                 PlotOutput.finishFigure(fig, config, 'prediction_history');
             end
         end
 
-        function limits = symmetricPlotLimit(errors, sigmas)
-            % Include all signed errors and three-sigma envelopes in a shared range.
-            extent = max([abs(errors(:)); 3 * sigmas(:)]);
-            extent = max(extent, eps(extent));
-            limits = 1.05 * [-extent, extent];
-        end
-
-        function plotSignedComponent(ax, time, error, sigma, config, color)
-            % Draw one signed component error and its +/-3-sigma envelope.
+        function plotErrorMagnitude(ax, time, error, sigma, config, color)
+            % Draw the magnitude and shade the visible region below 3 sigma.
             hold(ax, 'on');
 
             bound = 3 * sigma;
-            fill(ax, [time, fliplr(time)], [bound, -fliplr(bound)], ...
-                 color, 'FaceAlpha', 0.12, 'EdgeColor', 'none', ...
-                 'HandleVisibility', 'off');
             boundary_color = [0.45, 0.45, 0.45];
             plot(ax, time, bound, '-', 'Color', boundary_color, 'LineWidth', 0.5, ...
-                 'HandleVisibility', 'off');
-            plot(ax, time, -bound, '-', 'Color', boundary_color, 'LineWidth', 0.5, ...
                  'HandleVisibility', 'off');
 
             update_times = config.measurement_times * config.time_scale / 60;
             xline(ax, update_times, ':', 'Color', [0.65, 0.65, 0.65], ...
                   'HandleVisibility', 'off');
 
-            plot(ax, time, error, 'Color', color, 'LineWidth', 1.1);
-
-            yline(ax, 0, 'k-', 'HandleVisibility', 'off');
+            plot(ax, time, abs(error), 'Color', color, 'LineWidth', 1.1);
+            set(ax, 'YScale', 'log', 'XScale', 'linear');
+            limits = ylim(ax);
+            % Zero cannot be displayed on a log axis; shade down to its lower limit.
+            lower = limits(1);
+            shade = fill(ax, [time, fliplr(time)], ...
+                         [max(bound, lower), lower * ones(size(time))], ...
+                         color, 'FaceAlpha', 0.12, 'EdgeColor', 'none', ...
+                         'HandleVisibility', 'off');
+            ylim(ax, limits);
+            uistack(shade, 'bottom');
             grid(ax, 'on');
         end
 
@@ -174,6 +161,9 @@ classdef Visualization
 
             range_axes = nexttile(layout, 2);
             plot(range_axes, time_minutes, payload_to_catch_range, 'LineWidth', 1.2);
+            update_times = config.measurement_times * config.time_scale / 60;
+            xline(range_axes, update_times, '--', 'Color', [0.65, 0.65, 0.65], ...
+                  'LineWidth', 0.5, 'HandleVisibility', 'off');
             grid(range_axes, 'on');
             ylabel(range_axes, 'Range |r_3 - r_2| [km]');
             title(range_axes, 'Payload (m3) to catch mechanism (m2)');

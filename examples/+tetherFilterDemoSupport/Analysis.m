@@ -134,7 +134,7 @@ classdef Analysis
                     plot(ax, time, sigma(:, state), 'k--', 'LineWidth', 1.1);
                     plot(ax, time, rmse(:, state), '-o', 'LineWidth', 1.1, ...
                          'MarkerSize', 3, 'Color', [0, 0.447, 0.741]);
-                    set(ax, 'FontSize', 7);
+                    set(ax, 'FontSize', 7, 'YScale', 'log', 'XScale', 'linear');
                     grid(ax, 'on');
                     if body == 1
                         prefix = ["p", "v"];
@@ -446,6 +446,10 @@ classdef Analysis
                       repmat([0.85, 0.325, 0.098], 3, 1)];
             for endpoint = monte_carlo.endpoints
                 relative = Analysis.relativeStateDistribution(endpoint, config);
+                units = diag([1, 1, 1, 1e-3, 1e-3, 1e-3]);
+                relative.errors = relative.errors * units;
+                relative.covariance = units * relative.covariance * units;
+                relative.units(4:6) = "m/s";
                 sigma = sqrt(diag(relative.covariance));
                 labels = strings(2, 6);
                 for k = 1:6

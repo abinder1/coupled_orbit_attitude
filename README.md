@@ -194,10 +194,13 @@ measurement groups. The script holds the configuration and high-level
 workflow; its scenario, filter, Monte Carlo, analysis, and plotting helpers
 are grouped in `examples/+tetherFilterDemoSupport`.
 
-By default the demo displays the truth trajectories of the three bodies,
-alongside the payload-to-catch range and inbound speed. The optional prediction
-history creates one figure per body, with signed position and velocity errors
-and shaded componentwise +/-3-sigma bounds.
+The demo displays the truth trajectories of the three bodies, alongside the
+payload-to-catch range and inbound speed. The prediction history creates one
+figure per body, with absolute componentwise position and velocity errors and
+shaded regions below the positive 3-sigma bounds on logarithmic y-axes. Exact
+zero values cannot appear on a logarithmic axis. The range plot marks
+measurement times, the RMSE plot uses logarithmic y-axes, and relative-state
+corner plots show velocity uncertainty in m/s.
 
 Each plot is controlled by `config.plot_modes` in `demoConfig`
 (`prediction_history`, `trajectory`, `anees`, `rmse`, `innovations`, `residuals`, `corner`,
