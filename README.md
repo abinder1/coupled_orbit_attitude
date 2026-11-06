@@ -187,15 +187,20 @@ acceptance bounds for the mean of independent chi-square statistics, such as
 ANEES or ANIS. Degrees of freedom may be supplied as a scalar or matrix.
 
 Run `examples/tetherFilterDemo.m` in MATLAB for an example that propagates the
-tethered three-body estimate and covariance for 24 hours, applying 72 noisy
-measurement updates at 20-minute intervals with Joseph-form EKF updates. The
-demo selects all eight implemented measurement groups. It creates one figure
-per body, arranged as a 3-by-2 grid with x, y, and z component rows and
-position and velocity columns. Each subplot shows the signed error with a
-shaded componentwise +/-3-sigma bound.
+tethered three-body estimate and covariance for 24 hours, applying six noisy
+measurement updates, with the last update 30 minutes before the end. The
+iterated EKF uses Joseph-form covariance updates and all eight implemented
+measurement groups. The script holds the configuration and high-level
+workflow; its scenario, filter, Monte Carlo, analysis, and plotting helpers
+are grouped in `examples/+tetherFilterDemoSupport`.
+
+By default the demo displays the truth trajectories of the three bodies,
+alongside the payload-to-catch range and inbound speed. The optional prediction
+history creates one figure per body, with signed position and velocity errors
+and shaded componentwise +/-3-sigma bounds.
 
 Each plot is controlled by `config.plot_modes` in `demoConfig`
-(`prediction_history`, `anees`, `rmse`, `innovations`, `residuals`, `corner`,
+(`prediction_history`, `trajectory`, `anees`, `rmse`, `innovations`, `residuals`, `corner`,
 `relative_corner`). Set a plot to `"off"` to skip it (including its data
 preparation), `"save"` to export it to `config.plot_output_folder` as
 `config.plot_file_format` at `config.plot_resolution` dpi and close it, or
