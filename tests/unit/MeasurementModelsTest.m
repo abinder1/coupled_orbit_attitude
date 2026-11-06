@@ -88,14 +88,14 @@ classdef MeasurementModelsTest < matlab.unittest.TestCase
             meter = 1e-3 / length_scale;
             meter_per_sec = 1e-3 / speed_scale;
 
-            tc.verifyEqual(covariances.ground_angles, (10 * arcsec)^2 * eye(2));
-            tc.verifyEqual(covariances.camera_angles, (30 * arcsec)^2 * eye(2));
-            tc.verifyEqual(covariances.star_tracker_angles, (30 * arcsec)^2 * eye(2));
-            tc.verifyEqual(covariances.camera_angular_size, 2 * (30 * arcsec)^2);
+            tc.verifyEqual(covariances.ground_angles, (2 * arcsec)^2 * eye(2));
+            tc.verifyEqual(covariances.camera_angles, (5 * arcsec)^2 * eye(2));
+            tc.verifyEqual(covariances.star_tracker_angles, (10 * arcsec)^2 * eye(2));
+            tc.verifyEqual(covariances.camera_angular_size, 2 * (5 * arcsec)^2);
             tc.verifyEqual(covariances.dsn_range, (10 * meter)^2);
-            tc.verifyEqual(covariances.dsn_range_rate, (1e-2 * meter_per_sec)^2);
-            tc.verifyEqual(covariances.crosslink_range, (5 * meter)^2);
-            tc.verifyEqual(covariances.crosslink_range_rate, (0.1 * meter_per_sec)^2);
+            tc.verifyEqual(covariances.dsn_range_rate, (1e-3 * meter_per_sec)^2);
+            tc.verifyEqual(covariances.crosslink_range, (1 * meter)^2);
+            tc.verifyEqual(covariances.crosslink_range_rate, (1e-3 * meter_per_sec)^2);
             tc.verifyEqual(covariances.gnss_position, (10 * meter)^2 * eye(3));
         end
 

@@ -14,15 +14,15 @@ function meas_covs = measurementCovariances(length_scale, speed_scale)
     %   fields need to be passed to coa.meas.measurementModels.
     %
     %   Fields and nominal 1-sigma values:
-    %       ground_angles         2x2  10 arcsec, ground optical telescope
-    %       camera_angles         2x2  30 arcsec, onboard camera
-    %       star_tracker_angles   2x2  30 arcsec, star tracker cross-boresight
-    %       camera_angular_size  1x1  sqrt(2) * 30 arcsec, two independent
+    %       ground_angles         2x2  2 arcsec, ground optical telescope
+    %       camera_angles         2x2  5 arcsec, onboard camera
+    %       star_tracker_angles   2x2  10 arcsec, star tracker cross-boresight
+    %       camera_angular_size  1x1  sqrt(2) * 5 arcsec, two independent
     %                                      camera-angle errors
     %       dsn_range             1x1  10 m, ground DSN-class ranging
-    %       dsn_range_rate        1x1  10 mm/s, ground DSN-class Doppler
-    %       crosslink_range       1x1  5 m, RF crosslink code ranging
-    %       crosslink_range_rate  1x1  100 mm/s, RF crosslink Doppler
+    %       dsn_range_rate        1x1  1 mm/s, ground DSN-class Doppler
+    %       crosslink_range       1x1  1 m, RF crosslink code ranging
+    %       crosslink_range_rate  1x1  1 mm/s, RF crosslink Doppler
     %       gnss_position         3x3  10 m per axis, lunar PN&T/GNSS fix
     arguments
         length_scale (1, 1) double {mustBeFinite, mustBePositive}
@@ -34,13 +34,13 @@ function meas_covs = measurementCovariances(length_scale, speed_scale)
     meter = 1e-3 / length_scale;
     meter_per_sec = 1e-3 / speed_scale;
 
-    sigma_ground_angles = 10 * arcsec;
-    sigma_camera_angles = 30 * arcsec;
-    sigma_star_tracker_angles = 30 * arcsec;
+    sigma_ground_angles = 2 * arcsec;
+    sigma_camera_angles = 5 * arcsec;
+    sigma_star_tracker_angles = 10 * arcsec;
     sigma_dsn_range = 10 * meter;
-    sigma_dsn_range_rate = 1e-2 * meter_per_sec;
-    sigma_crosslink_range = 5 * meter;
-    sigma_crosslink_range_rate = 0.1 * meter_per_sec;
+    sigma_dsn_range_rate = 1e-3 * meter_per_sec;
+    sigma_crosslink_range = 1 * meter;
+    sigma_crosslink_range_rate = 1e-3 * meter_per_sec;
     sigma_gnss_position = 10 * meter;
 
     meas_covs.ground_angles = sigma_ground_angles^2 * eye(2);
