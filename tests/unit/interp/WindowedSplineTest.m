@@ -6,7 +6,7 @@ classdef WindowedSplineTest < matlab.unittest.TestCase
     methods (TestMethodSetup)
 
         function addToolboxPath(tc)
-            root = fileparts(fileparts(fileparts(mfilename('fullpath'))));
+            root = fileparts(fileparts(fileparts(fileparts(mfilename('fullpath')))));
             old_path = path;
             tc.addTeardown(@() path(old_path));
             addpath(fullfile(root, 'toolbox'));
