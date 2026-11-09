@@ -6,7 +6,7 @@ Simulation code and derivations for coupled orbit-attitude dynamics.
 
 | Folder | Contents |
 |---|---|
-| `toolbox/+coa/` | Production code, in the `coa` namespace (`coa.orbit.*`, `coa.meas.*`, `coa.filter.*`, `coa.util.*`) |
+| `toolbox/+coa/` | Production code, in the `coa` namespace (`coa.orbit.*`, `coa.meas.*`, `coa.filter.*`, `coa.interp.*`, `coa.util.*`) |
 | `tests/unit/` | Fast tests of derivation results (limits, symmetries, identities) |
 | `tests/regression/` | Short fixed-seed runs compared against references in `tests/data/` |
 | `derivations/` | LaTeX derivations; equation labels (`eq:...`) are referenced in code comments |
@@ -99,6 +99,32 @@ only code under `toolbox/` is measured.
 `report.html`, `report_data.js` and the XML results are regenerated and
 git-ignored. `buildtool clean` deletes only the two XML result files; the
 report files remain until the next run of the script overwrites them.
+
+## Windowed position and velocity spline
+
+`coa.interp.fitWindowedSpline(t, position, velocity)` fits independent
+components in the columns of N-by-D position and velocity arrays using a shared
+time basis. `t` is a strictly increasing time vector, and velocity is expressed
+per unit of `t`. Evaluate the fitted spline and its first three derivatives with:
+
+```matlab
+sp = coa.interp.fitWindowedSpline(t, position, velocity);
+values = coa.interp.evaluateSpline(sp, query_times, 3);
+position_fit = values(:, :, 1);
+velocity_fit = values(:, :, 2);
+acceleration = values(:, :, 3);
+jerk = values(:, :, 4);
+```
+
+By default the fit uses a quintic B-spline with continuous derivatives through
+fourth order at interior knots. It is a windowed least-squares approximation,
+not exact interpolation; derivatives depend on sampling and fit settings and
+should be validated against independent reference data. It requires the complete
+time grid and uses lookahead, so it is not an online append interface. The
+optional `opts` struct controls order, window length, stride, and velocity
+weight; see the function help. Query times must be inside the fitted interval.
+Run `examples/windowedSplineDemo.m` for a synthetic multidimensional example
+with accuracy, continuity, and timing diagnostics.
 
 ## Tether initial state
 
