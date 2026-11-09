@@ -4,7 +4,7 @@ classdef TetherFilterDemoVisualizationTest < matlab.unittest.TestCase
     methods (TestMethodSetup)
 
         function addExamplePath(tc)
-            root = fileparts(fileparts(fileparts(mfilename('fullpath'))));
+            root = fileparts(fileparts(fileparts(fileparts(mfilename('fullpath')))));
             original_path = path;
             addpath(fullfile(root, 'examples'));
             tc.addTeardown(@path, original_path);
