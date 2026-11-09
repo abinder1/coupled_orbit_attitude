@@ -22,7 +22,5 @@ function plan = buildfile
 end
 
 function setupTask(~)
-    % Put the project root (and all subfolders) on the MATLAB path.
-    root = fileparts(mfilename("fullpath")); % folder holding buildfile (project root)
-    addpath(genpath(root));
+    setupProjectPaths();
 end

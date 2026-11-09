@@ -1,0 +1,3 @@
+[submodule "external/ephem_integrator"]
+	path = external/ephem_integrator
+	url = https://github.com/abinder1/ephem_integrator.git

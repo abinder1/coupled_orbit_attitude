@@ -6,7 +6,8 @@ Simulation code and derivations for coupled orbit-attitude dynamics.
 
 | Folder | Contents |
 |---|---|
-| `toolbox/+coa/` | Production code, in the `coa` namespace (`coa.orbit.*`, `coa.meas.*`, `coa.filter.*`, `coa.interp.*`, `coa.util.*`) |
+| `toolbox/+coa/` | Production code, in the `coa` namespace (`coa.orbit.*`, `coa.meas.*`, `coa.filter.*`, `coa.util.*`) |
+| `external/ephem_integrator/` | Pinned Git submodule providing `emframe.interp.*` and its own plans and tests |
 | `tests/unit/` | Unit tests grouped by toolbox package and examples |
 | `tests/regression/` | Short fixed-seed runs compared against references in `tests/data/` |
 | `derivations/` | LaTeX derivations; equation labels (`eq:...`) are referenced in code comments |
@@ -14,20 +15,123 @@ Simulation code and derivations for coupled orbit-attitude dynamics.
 | `scratch/` | Exploratory work; never called from `toolbox/` |
 | `__archive/` | Legacy scripts kept for reference |
 
-## Usage
+## Repository setup and submodules
 
-Requires MATLAB R2024a or later. From the repository root:
+Requires MATLAB R2024a or later and access to the private
+`abinder1/ephem_integrator` repository. The dependency is a Git submodule:
+the parent repository records an exact `ephem_integrator` commit, not a copy of
+its files or an automatically updated branch. A normal parent checkout therefore
+uses the same dependency revision as everyone else on that parent commit.
+
+### Clone and initialize
+
+1. Make sure your GitHub account has access to both repositories and that Git
+   can authenticate to GitHub over HTTPS. If a clone or fetch fails, check
+   repository access and your Git credential setup.
+2. Clone the parent with its submodule:
+
+   ```powershell
+   git clone --recurse-submodules https://github.com/abinder1/coupled_orbit_attitude.git
+   cd coupled_orbit_attitude
+   ```
+
+3. If you already cloned without submodules, or after switching parent commits
+   or branches, run this from the parent repository root:
+
+   ```powershell
+   git submodule update --init --recursive
+   ```
+
+   This checks out the **parent's recorded commit**, not the newest
+   `ephem_integrator` commit. It also initializes an empty submodule directory.
+   Do not run it over uncommitted submodule work without first preserving that
+   work.
+4. Verify the checkout:
+
+   ```powershell
+   git submodule status
+   git -C external\ephem_integrator status
+   ```
+
+   In `git submodule status`, a leading space means the checked-out revision
+   matches the parent's pin; `-` means uninitialized, `+` means a different
+   revision is checked out, and `U` means a merge conflict. A detached HEAD in
+   the submodule is normal.
+
+If MATLAB reports that the submodule is missing or incomplete, run the
+initialization command above from the parent root. If Git cannot fetch it,
+resolve access/authentication first; the submodule is private.
+
+### Intentionally update the dependency pin
+
+Updating or pulling `ephem_integrator` independently does **not** change the
+commit recorded by the parent. Conversely, `git submodule update --init
+--recursive` restores the parent's existing pin; it does not select the latest
+library version. To adopt a newer library revision:
+
+1. Finish, commit, or otherwise preserve any work in the submodule. Check both
+   `git status` in the parent and `git -C external\ephem_integrator status`
+   before changing revisions.
+2. From the parent root, fetch and inspect the library's published history:
+
+   ```powershell
+   git -C external\ephem_integrator fetch origin
+   git -C external\ephem_integrator log --oneline -10 origin/main
+   ```
+
+3. Select a reviewed, published commit and check it out in the submodule.
+   Replace the placeholder below with its full commit hash:
+
+   ```powershell
+   $commit = 'REPLACE_WITH_REVIEWED_COMMIT_HASH'
+   git -C external\ephem_integrator checkout --detach $commit
+   git submodule status
+   git diff --submodule=log -- external\ephem_integrator
+   ```
+
+4. Run `matlab -batch "buildtool clean test"` from the parent root. Also run
+   the dependency's own tests from its root with
+   `matlab -batch "buildtool clean test"`. Review the library changes and
+   any parent changes needed for compatibility.
+5. After review and approval, stage the new parent gitlink with
+   `git add external\ephem_integrator` and commit it with the associated
+   parent changes. Make sure the selected library commit has been published
+   and is accessible to collaborators before pushing the parent commit.
+   Other clones obtain that exact revision by running
+   `git submodule update --init --recursive` after receiving the parent commit.
+
+If you are developing the library itself, work and commit in
+`ephem_integrator` first, following its own review workflow; then update and
+review the parent pin separately. Do not rely on an uncommitted change inside
+the submodule: it is not included in the parent commit.
+
+### MATLAB paths and tests
+
+From the repository root in MATLAB:
 
 ```matlab
-buildtool          % add toolbox to path, run Code Analyzer, run all tests
+buildtool          % set project paths, run Code Analyzer, run all tests
 buildtool clean    % delete the XML test and coverage results
 ```
 
 Test results and coverage are written to `test_results/`
 (`test-results.xml` and `coverage.xml`).
 The build task recursively discovers unit and regression tests in `tests/`.
-To run all unit tests directly, use
-`runtests('tests/unit', 'IncludeSubfolders', true)`.
+To set up an interactive MATLAB session or run all unit tests directly:
+
+```matlab
+setupProjectPaths
+runtests('tests/unit', 'IncludeSubfolders', true)
+```
+
+The setup adds the parent toolbox and examples and the dependency's production
+toolbox, not the dependency's tests or examples. If the submodule is missing,
+setup reports an error with the initialization command. The current spline
+utility does not require Mice or ephemeris data; future models may require them.
+For code launched from another working directory, first add the parent
+repository root to MATLAB's path, then call `setupProjectPaths`. Call setup
+once per MATLAB session before using `emframe.*` from your own code. It does
+not persist the path between sessions.
 
 ## Test and coverage report
 
@@ -105,19 +209,44 @@ report files remain until the next run of the script overwrites them.
 
 ## Windowed position and velocity spline
 
-`coa.interp.fitWindowedSpline(t, position, velocity)` fits independent
-components in the columns of N-by-D position and velocity arrays using a shared
-time basis. `t` is a strictly increasing time vector, and velocity is expressed
-per unit of `t`. Evaluate the fitted spline and its first three derivatives with:
+The implementation belongs to the `ephem_integrator` submodule. After
+initializing the submodule and calling `setupProjectPaths`, call its
+`emframe.interp` functions directly; there is no separate parent copy.
+For example, from the parent root:
 
 ```matlab
-sp = coa.interp.fitWindowedSpline(t, position, velocity);
-values = coa.interp.evaluateSpline(sp, query_times, 3);
+t = linspace(0, 4, 101).';                     % N sample times
+position = [sin(t), cos(t)];                   % N-by-2 samples
+velocity = [cos(t), -sin(t)];                  % N-by-2 derivatives
+opts = struct('order', 6, 'window_size', 40, ...
+              'stride', 20, 'velocity_weight', 1);
+sp = emframe.interp.fitWindowedSpline(t, position, velocity, opts);
+query_times = linspace(t(1), t(end), 201).';
+values = emframe.interp.evaluateSpline(sp, query_times, 3);
 position_fit = values(:, :, 1);
 velocity_fit = values(:, :, 2);
 acceleration = values(:, :, 3);
 jerk = values(:, :, 4);
 ```
+
+For `M` query times and `D` components, `values` has size `M`-by-`D`-by-4
+when requesting three derivatives. Inputs are finite real doubles; sample
+times must be strictly increasing and the velocity units must be position
+units per unit of `t`. The result's derivatives use the same time units.
+The options struct is optional; the example spells out the defaults.
+
+The runnable [example](examples/ephemSplineUsage.m) shows the same direct
+dependency calls in a MATLAB function. From the parent root, run:
+
+```matlab
+addpath('examples')
+[query_times, values] = ephemSplineUsage();
+```
+
+The example initializes the project paths itself. In your own functions,
+initialize once as described above and call the `emframe.interp` APIs directly.
+Use `help emframe.interp.fitWindowedSpline` and
+`help emframe.interp.evaluateSpline` for the library's full API.
 
 By default the fit uses a quintic B-spline with continuous derivatives through
 fourth order at interior knots. It is a windowed least-squares approximation,
@@ -126,8 +255,11 @@ should be validated against independent reference data. It requires the complete
 time grid and uses lookahead, so it is not an online append interface. The
 optional `opts` struct controls order, window length, stride, and velocity
 weight; see the function help. Query times must be inside the fitted interval.
-Run `examples/windowedSplineDemo.m` for a synthetic multidimensional example
-with accuracy, continuity, and timing diagnostics.
+Run `external/ephem_integrator/examples/windowedSplineDemo.m` for a synthetic
+multidimensional example with accuracy, continuity, and timing diagnostics.
+The former `coa.interp` API and its error identifiers have been removed; callers
+must use `emframe.interp` and its `emframe:interp:...` error identifiers.
+The authoritative ephemeris plans and spline unit tests are in the submodule.
 
 ## Tether initial state
 
