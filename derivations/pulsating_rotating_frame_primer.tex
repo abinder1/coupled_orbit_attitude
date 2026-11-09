@@ -1,0 +1,443 @@
+\documentclass[11pt]{article}
+
+%%%%%%%%%%%%% Package imports %%%%%%%%%%%%%
+% Uses Latin Modern + T1 when available; falls back to default fonts otherwise.
+\IfFileExists{lmodern.sty}%
+  {\usepackage[T1]{fontenc}\usepackage{lmodern}\usepackage{microtype}}%
+  {\usepackage[T1]{fontenc}\usepackage[expansion=false]{microtype}}
+\usepackage[backend=biber, style=numeric, sorting=none]{biblatex}
+\usepackage{enumitem}
+\usepackage{listings}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{bm}
+\usepackage{xcolor}
+\usepackage[colorlinks=true,linkcolor=blue!50!black,citecolor=green!35!black,urlcolor=blue!60!black]{hyperref}
+
+\addbibresource{pulsating_rotating_frame_primer.bib}
+
+%%%%%%%%%%%%% Macro definitions %%%%%%%%%%%%%
+\setlist{itemsep=2pt,topsep=4pt}
+
+\lstset{basicstyle=\ttfamily\small,columns=fullflexible,keepspaces=true,
+        frame=single,framerule=0.3pt,rulecolor=\color{black!30},
+        breaklines=true,commentstyle=\color{green!40!black},
+        keywordstyle=\color{blue!60!black},language=Matlab,
+        showstringspaces=false}
+
+\newcommand{\vr}{\bm{r}}
+\newcommand{\vv}{\bm{v}}
+\newcommand{\va}{\bm{a}}
+\newcommand{\vj}{\bm{j}}
+\newcommand{\vh}{\bm{h}}
+\newcommand{\vR}{\bm{R}}
+\newcommand{\vF}{\bm{F}}
+\newcommand{\rhov}{\bm{\rho}}
+\newcommand{\omv}{\bm{\omega}}
+
+\newenvironment{note}[1]
+  {\begin{quote}\small\textbf{#1}\ }
+  {\end{quote}}
+
+%%%%%%%%%%%%% Title card content %%%%%%%%%%%%%
+\title{The Earth--Moon Pulsating Rotating Frame\\
+\large A Primer on Frame Construction, Equations of Motion,\\
+Ephemeris Derivatives, and Trade-offs}
+\author{Andrew}
+\date{\today}
+
+%%%%%%%%%%%%% Begin document %%%%%%%%%%%%%
+\begin{document}
+\maketitle
+\tableofcontents
+\clearpage
+
+%======================================================================
+\section{Motivation and overview}
+
+The CR3BP synodic frame does two things to the Earth--Moon line:
+\begin{itemize}
+  \item it \emph{rotates} at a constant rate $n$;
+  \item it \emph{scales} lengths by a constant distance $l^*$.
+\end{itemize}
+
+In reality, the Earth--Moon separation varies between roughly 356{,}000 and 407{,}000~km. The lunar orbit plane wobbles, and the rotation rate is not constant. In a constant-rate frame, the primaries therefore drift away from $(-\mu,0,0)$ and $(1-\mu,0,0)$.
+
+The \emph{pulsating rotating} (or ``roto-pulsating'') frame fixes this by building the frame from the \emph{instantaneous} Earth--Moon geometry:
+\begin{itemize}
+  \item the $x$-axis always points along the actual Earth$\to$Moon vector;
+  \item the $z$-axis is along the instantaneous orbital angular momentum;
+  \item lengths are scaled by the instantaneous separation $l(t)$.
+\end{itemize}
+
+As a result, the Earth and Moon sit \emph{exactly} at $(-\mu,0,0)$ and $(1-\mu,0,0)$ for all time. This holds in the Keplerian case and also with a full ephemeris. All remaining effects appear as small non-autonomous terms in the equations of motion.
+
+There are two common flavors:
+\begin{enumerate}
+  \item \textbf{ER3BP pulsating frame.} The Moon follows a fixed Keplerian ellipse, and the frame rotates about a fixed $\hat z$ at rate $\dot f$. This is Szebehely's classic formulation.
+  \item \textbf{Ephemeris (general) pulsating frame.} The frame is built from DE-ephemeris states, with $\hat z$ allowed to wobble. This version is used in high-fidelity design and CR3BP$\to$ephemeris refinement.
+\end{enumerate}
+
+The general case is derived below; the ER3BP falls out as a special case.
+
+%======================================================================
+\section{Frame construction}
+
+\subsection{Basis and position mapping}
+
+Let $\vr(t) = \vR_M - \vR_E$ be the Moon's position relative to Earth, with $\vv = \dot\vr$, $\va = \ddot\vr$, and $\vj = \dddot\vr$. Let $\vR_B(t)$ be the Earth--Moon barycenter (EMB). Define
+\begin{equation}
+l = \|\vr\|,\qquad \vh = \vr\times\vv,\qquad h = \|\vh\|,
+\end{equation}
+\begin{equation}
+\hat x = \frac{\vr}{l},\qquad \hat z = \frac{\vh}{h},\qquad \hat y = \hat z\times\hat x,\qquad C(t) = [\hat x\;\hat y\;\hat z].
+\end{equation}
+The nondimensional position $\rhov$ of a spacecraft at inertial position $\vR$ is defined by
+\begin{equation}
+\boxed{\vR = \vR_B(t) + l(t)\,C(t)\,\rhov}
+\label{eq:map}
+\end{equation}
+
+\subsection{Frame angular velocity}
+
+Write $\dot C = C[\omv]_\times$, with $\omv$ expressed in frame components. Components of $\va$ in the rotating frame are $(a_x, a_y, a_z)$.
+
+\paragraph{The $\hat x$ derivative.}
+\begin{equation}
+\dot{\hat x} = \frac{\vv - \dot l\,\hat x}{l} = \frac{h}{l^2}\,\hat y.
+\end{equation}
+Since $\dot{\hat x} = \omv\times\hat x = \omega_z\hat y - \omega_y\hat z$, this gives $\omega_z = h/l^2$ and $\omega_y = 0$.
+
+\paragraph{The $\hat z$ derivative.} Start from
+\begin{equation}
+\dot\vh = \vr\times\va = l\,(a_y\hat z - a_z\hat y).
+\end{equation}
+The component of this perpendicular to $\hat z$ rotates the orbit plane:
+\begin{equation}
+\dot{\hat z} = -\frac{l a_z}{h}\,\hat y = \omv\times\hat z = -\omega_x\hat y.
+\end{equation}
+
+The frame angular velocity is therefore
+\begin{equation}
+\boxed{\omv = \frac{l\,a_z}{h}\,\hat x + \frac{h}{l^2}\,\hat z}
+\end{equation}
+
+The $\omega_x$ term is the plane-wobble term. It is driven by the out-of-plane component of the Moon's relative acceleration, which comes mainly from the Sun. It vanishes in the ER3BP.
+
+\subsection{Required derivatives}
+
+The equations of motion need $\dot l$, $\ddot l$, and $\dot\omv$. Using $\|\vv\|^2 - \dot l^2 = h^2/l^2$,
+\begin{equation}
+\dot l = \frac{\vr\cdot\vv}{l},\qquad \ddot l = a_x + l\,\omega_z^2.
+\end{equation}
+For the angular rates, use $\dot h = l a_y$ and $\dot a_z = j_z - \omega_x a_y$:
+\begin{align}
+\dot\omega_z &= \frac{a_y}{l} - \frac{2\dot l}{l}\,\omega_z, \\
+\dot\omega_x &= \frac{\dot l\,a_z + l\,(j_z - \omega_x a_y)}{h} - \frac{l^2 a_y a_z}{h^2}.
+\end{align}
+Because $\omv\times\omv = 0$, the inertial and rotating derivatives of $\omv$ coincide, so these are simply component derivatives.
+
+\begin{note}{Practical note.}
+The equations of motion need the Earth--Moon relative motion up to the \emph{third derivative} (jerk). Obtaining these derivatives is the main implementation task; see Sections~\ref{sec:cheb}--\ref{sec:accjerk}.
+\end{note}
+
+%======================================================================
+\section{Equations of motion}
+
+\subsection{Kinematics}
+
+Primes denote time derivatives taken in the rotating frame. Differentiating \eqref{eq:map} twice gives
+\begin{equation}
+\dot\vR = \dot\vR_B + C\big[\dot l\,\rhov + l(\rhov' + \omv\times\rhov)\big],
+\end{equation}
+\begin{equation}
+\ddot\vR = \ddot\vR_B + C\Big[\ddot l\,\rhov + 2\dot l(\rhov' + \omv\times\rhov)
++ l\big(\rhov'' + 2\omv\times\rhov' + \dot\omv\times\rhov + \omv\times(\omv\times\rhov)\big)\Big].
+\end{equation}
+
+\subsection{Dynamics}
+
+Point-mass gravity from bodies $i$, plus other forcing $\vF$ (SRP, thrust, and so on), gives the inertial acceleration
+\begin{equation}
+\ddot\vR = -\sum_i Gm_i\frac{\vR - \vR_i}{\|\vR - \vR_i\|^3} + \vF.
+\end{equation}
+Since $\vR - \vR_i = lC(\rhov - \rhov_i)$, the gravity term scales as $1/l^2$. Equating the two expressions for $\ddot\vR$:
+\begin{equation}
+\boxed{
+\begin{aligned}
+&\rhov'' + 2\omv\times\rhov' + 2\frac{\dot l}{l}\rhov'
++ \Big[\dot\omv\times{} + \omv\times\omv\times{} + 2\frac{\dot l}{l}\,\omv\times{} + \frac{\ddot l}{l}\Big]\rhov \\
+&\qquad = -\frac{1}{l^3}\sum_i Gm_i\frac{\rhov - \rhov_i}{\|\rhov - \rhov_i\|^3}
+- \frac{C^T\ddot\vR_B}{l} + \frac{C^T\vF}{l}
+\end{aligned}}
+\label{eq:eom}
+\end{equation}
+
+Notes on the terms:
+\begin{itemize}
+  \item \textbf{Earth and Moon positions.} $\rhov_E = (-\mu,0,0)$ and $\rhov_M = (1-\mu,0,0)$ are constant by construction.
+  \item \textbf{Other bodies.} The Sun and planets have moving positions $\rhov_j(t) = C^T(\vR_j - \vR_B)/l$.
+  \item \textbf{Barycenter acceleration.} In an Earth--Moon-only point-mass model, $\ddot\vR_B = 0$. With the Sun included, $\ddot\vR_B$ is the mass-weighted solar acceleration of the EMB. It partially cancels the Sun's direct term, so the Sun effectively acts as a \emph{tidal} perturbation.
+\end{itemize}
+
+\subsection{Choice of independent variable}
+
+\begin{description}[style=nextline]
+  \item[Constant scaling, $\tau = n^* t$.] This is the simplest choice. Physical time stays linear, which helps with thrust, events, and attitude. The gravity terms carry factors such as $(l^*/l)^3$.
+  \item[Instantaneous mean motion, $d\tau/dt = \sqrt{GM_{EM}/l^3}$.] This normalizes the Earth--Moon gravity coefficients to exactly $1-\mu$ and $\mu$. It introduces extra $\dot k/k$ terms.
+  \item[True anomaly $f$.] This is the ER3BP choice (Section~\ref{sec:er3bp}). It gives the most CR3BP-like form.
+\end{description}
+
+\subsection{Velocity mapping}
+
+\begin{equation}
+\rhov = \frac{C^T(\vR - \vR_B)}{l},\qquad
+\rhov' = \frac{C^T(\dot\vR - \dot\vR_B)}{l} - \frac{\dot l}{l}\,\rhov - \omv\times\rhov.
+\end{equation}
+Rescale $\rhov'$ by $dt/d\tau$ for the chosen time variable.
+
+\begin{note}{Common error.}
+Omitting the $\dot l$ term gives velocity errors of about 5\% of the rotating-frame speed. That is enough to ruin a converged manifold or periodic orbit.
+\end{note}
+
+%======================================================================
+\section{Specialization: the ER3BP}
+\label{sec:er3bp}
+
+Assume a Keplerian Moon:
+\begin{equation}
+\va = -\frac{GM\,\vr}{l^3}\quad\Rightarrow\quad a_y = a_z = 0,\qquad a_x = -\frac{GM}{l^2}.
+\end{equation}
+Then:
+\begin{itemize}
+  \item $\omega_x = 0$ and $\omega_z = \dot f = h/l^2$, with $h$ constant;
+  \item $\ddot l = -GM/l^2 + l\dot f^2$ and $\dot\omega_z = -2\dot l\,\dot f/l$;
+  \item $l = p/(1 + e\cos f)$.
+\end{itemize}
+
+Change the independent variable to $f$ via $d/dt = \dot f\,d/df$. The $\ddot l$, $\dot l$, and $\dot\omega_z$ terms collapse to Szebehely's form:
+\begin{equation}
+x'' - 2y' = \frac{\partial\varpi}{\partial x},\qquad
+y'' + 2x' = \frac{\partial\varpi}{\partial y},\qquad
+z'' = \frac{\partial\varpi}{\partial z},
+\end{equation}
+\begin{equation}
+\varpi = \frac{1}{1 + e\cos f}\left[\tfrac12\big(x^2 + y^2 - e z^2\cos f\big) + \frac{1-\mu}{r_1} + \frac{\mu}{r_2}\right].
+\end{equation}
+
+An equivalent form writes $z'' + z = \partial\omega/\partial z$, with
+\begin{equation}
+\omega = \frac{1}{1 + e\cos f}\left[\tfrac12(x^2 + y^2 + z^2) + \frac{1-\mu}{r_1} + \frac{\mu}{r_2}\right].
+\end{equation}
+
+This is the CR3BP pseudo-potential divided by $1 + e\cos f$, plus a small $z$ correction. Setting $e = 0$ recovers the CR3BP exactly, which makes $e$ a natural continuation parameter.
+
+\paragraph{Earth--Moon values.} The mass ratio is $\mu \approx 0.01215$ and the mean eccentricity is $e \approx 0.0549$. The \emph{osculating} lunar eccentricity, however, varies roughly between 0.026 and 0.077 because of solar evection.
+
+A constant-$e$ ER3BP therefore captures the right physics but the wrong timing of the pulsation. This is the main reason to use the ephemeris version for real design.
+
+%======================================================================
+\section{Variational equations and design workflow}
+
+\subsection{State transition matrix}
+
+Use the state $\mathbf X = [\rhov;\,\rhov']$, dimensional time, and $\Omega = [\omv]_\times$. The Jacobian is
+\begin{equation}
+A(t) = \begin{bmatrix} 0 & I \\[4pt]
+\dfrac{\partial\mathbf g}{\partial\rhov} - \Big(\dot\Omega + \Omega^2 + 2\dfrac{\dot l}{l}\Omega + \dfrac{\ddot l}{l}I\Big) &
+-2\Omega - 2\dfrac{\dot l}{l}I \end{bmatrix}.
+\end{equation}
+The gravity gradient is
+\begin{equation}
+\frac{\partial\mathbf g}{\partial\rhov} = -\frac{1}{l^3}\sum_i Gm_i\left(\frac{I}{d_i^3} - \frac{3\,\mathbf d_i\mathbf d_i^T}{d_i^5}\right),\qquad \mathbf d_i = \rhov - \rhov_i.
+\end{equation}
+
+The frame terms are state-independent. The STM therefore costs essentially the same as in the CR3BP, apart from evaluating $l$, $\dot l$, $\ddot l$, $\omv$, and $\dot\omv$ at each step.
+
+\subsection{Typical workflow}
+
+\begin{enumerate}
+  \item \textbf{Design in the CR3BP.} Compute the periodic orbits, manifolds, and patch points.
+  \item \textbf{Choose an epoch.} The phasing with lunar perigee and apogee matters.
+  \item \textbf{Map the initial guess.} Use the CR3BP $\rhov$ states \emph{directly} as initial guesses in the pulsating frame. No geometric distortion has to be undone.
+  \item \textbf{Converge.} Use multiple shooting, either through ER3BP or BCR4BP continuation or directly in the ephemeris-pulsating EOM. Epochs or times can be free variables.
+  \item \textbf{Validate.} Map to inertial J2000 and check against an independent $n$-body propagator.
+\end{enumerate}
+
+%======================================================================
+\section{Pros and cons}
+
+\subsection{Pros}
+
+\begin{itemize}
+  \item \textbf{The primaries are exactly fixed}, even with a full ephemeris. CR3BP structures (libration points, Lyapunov, halo, and NRHO families, manifold tubes) remain recognizable and directly comparable.
+  \item \textbf{CR3BP solutions are excellent initial guesses.} The remaining perturbations are small and mostly periodic, so differential correction usually converges in a few iterations. In a constant-rate frame, by contrast, the Moon wanders by tens of thousands of km.
+  \item \textbf{Apparent motion is filtered out.} The roughly $\pm7\%$ breathing of the Earth--Moon distance no longer appears as drift. Libration-point orbits look quasi-periodic rather than smeared.
+  \item \textbf{Clean homotopy is possible.} The eccentricity $e$ in the ER3BP and the Sun's mass parameter in the forcing let you continue CR3BP $\to$ ER3BP $\to$ BCR4BP $\to$ ephemeris.
+  \item \textbf{The libration points are nearly stationary.} This makes the frame a natural reference for station-keeping and for relative motion near $L_1$ and $L_2$.
+  \item \textbf{The STM has the same structure as in the CR3BP}, so existing CR3BP tools carry over with modest changes.
+\end{itemize}
+
+\subsection{Cons}
+
+\begin{itemize}
+  \item \textbf{The dynamics are non-autonomous.} There is no Jacobi integral, not even in the ER3BP. Periodic orbits survive only at resonances with the pulsation period, and generic families become quasi-periodic tori. Energy-based reasoning, such as zero-velocity curves and gateway arguments, becomes approximate.
+  \item \textbf{The scaling is non-uniform and time-varying.} The same nondimensional distance corresponds to different kilometers at different epochs. Physical constraints suffer as a result: altitude limits, keep-out zones, sensor ranges, and rendezvous distances must each be re-dimensionalized with $l(t)$.
+  \item \textbf{The implementation burden is real.} You need ephemeris acceleration \emph{and} jerk, careful velocity mapping, and consistent time scaling. Errors here are silent and produce plausible-looking results.
+  \item \textbf{Physically timed or physically sized effects are awkward.} Thrust, SRP, and drag must be scaled by $C^T(\cdot)/l$ and the time factor. A fixed physical length, such as a tether, ``breathes'' in $\rhov$-space as $1/l$. Attitude references inherit the $\dot\omv$ and wobble terms.
+
+  For coupled orbit-attitude or tether dynamics, it is usually cleaner to:
+  \begin{itemize}
+    \item integrate attitude and internal dynamics inertially or in a body frame;
+    \item reserve the pulsating frame for center-of-mass translational design and visualization.
+  \end{itemize}
+  \item \textbf{The Sun appears as forcing, not structure.} For Sun-assisted, low-energy, or ballistic lunar transfers that leave the Earth--Moon system, a bicircular or quasi-bicircular model, or a Sun--Earth frame, often exposes the relevant geometry better.
+  \item \textbf{Results depend on the epoch.} A single CR3BP solution becomes a family of ephemeris solutions indexed by epoch. Choosing the epoch (lunar phase, perigee timing, node position) is itself a design variable.
+  \item \textbf{The advantage weakens far from the Moon.} At several lunar distances the Sun dominates, and the frame no longer keeps motion near-stationary.
+\end{itemize}
+
+%======================================================================
+\section{Ephemeris Chebyshev polynomials}
+\label{sec:cheb}
+
+\subsection{Structure of the DE files}
+
+The JPL Development Ephemerides (DE430, DE440, and so on) do not store tables of positions. JPL numerically integrates the solar system and fits the result with \emph{piecewise Chebyshev polynomials}. That compressed fit is what is distributed, both as binary or ASCII DE files and as SPICE \texttt{.bsp} kernels (SPK type~2 segments).
+
+\begin{description}[style=nextline]
+  \item[Records.] The file is a sequence of fixed-length records of 32 days. Each record begins with its start and end Julian dates (TDB).
+  \item[Granules.] Within a record, each body's interval is split into $n_s$ equal subintervals called granules. Each granule holds $N$ coefficients per Cartesian component.
+  \item[Header array.] The header array (\texttt{IPT}) gives each body's coefficient offset, $N$, and $n_s$. The fast-moving Moon gets many short granules, while the outer planets get one long one. Read the exact counts from the header of the file you use.
+\end{description}
+
+\subsection{The series}
+
+Within a granule $[t_a, t_b]$, time is mapped to $x\in[-1,1]$:
+\begin{equation}
+x = \frac{2(t - t_a)}{t_b - t_a} - 1,\qquad
+\vr(t) = \sum_{n=0}^{N-1}\mathbf c_n\,T_n(x).
+\end{equation}
+The polynomials satisfy the recurrence
+\begin{equation}
+T_0 = 1,\qquad T_1 = x,\qquad T_{n+1} = 2x\,T_n - T_{n-1}.
+\end{equation}
+
+\paragraph{Why Chebyshev.} On $[-1,1]$, the truncation error of a Chebyshev series is close to the minimax optimum and spread evenly. There is no Runge-type blowup at the interval ends. Clenshaw summation also makes evaluation cheap and stable.
+
+\subsection{A convenient detail}
+
+In the DE files, the Moon is stored \emph{geocentric}. That series is directly $\vr = \vR_M - \vR_E$, the vector the pulsating frame is built from.
+
+The EMB is stored as a separate series. Earth and Moon positions individually follow from the EMB, the geocentric Moon, and the Earth/Moon mass ratio \texttt{EMRAT} in the header.
+
+\subsection{Locating the coefficients}
+
+\begin{enumerate}
+  \item Find the record containing the epoch.
+  \item Compute the granule index: $i = \lfloor (t - t_{\mathrm{rec}})/(32/n_s)\rfloor$.
+  \item Read $3N$ doubles starting at the body's offset plus $3Ni$. They are stored as all $x$ coefficients, then all $y$, then all $z$.
+\end{enumerate}
+Units are km and days.
+
+\subsection{Tooling}
+
+MATLAB's \texttt{planetEphemeris} and SPICE/Mice's \texttt{cspice\_spkezr} return only position and velocity. To get higher derivatives from the fit, read the DE file directly. The binary format is straightforward, and JPL publishes both binary and ASCII versions.
+
+%======================================================================
+\section{Obtaining acceleration and jerk}
+\label{sec:accjerk}
+
+\subsection{Method A: differentiate the Chebyshev series}
+
+Differentiate the recurrence $k$ times using Leibniz's rule:
+\begin{equation}
+T_{n+1}^{(k)} = 2x\,T_n^{(k)} + 2k\,T_n^{(k-1)} - T_{n-1}^{(k)}.
+\end{equation}
+The starting values are $T_0^{(k)} = 0$, $T_1' = 1$, and $T_1^{(k\ge 2)} = 0$. Run this alongside the base recurrence. Then apply the chain rule:
+\begin{equation}
+\frac{d^k\vr}{dt^k} = \left(\frac{2}{t_b - t_a}\right)^{k}\sum_n \mathbf c_n\,T_n^{(k)}(x).
+\end{equation}
+
+The function \texttt{cheb\_eval.m} in Appendix~\ref{app:code} implements this for one granule's $N\times 3$ coefficient block. It returns position, velocity, acceleration, and jerk in km, km/day, km/day$^2$, and km/day$^3$. Convert to seconds before using them in the EOM.
+
+\paragraph{Coefficient-space alternative.} Differentiate the coefficients directly using the recurrence $c'_{n-1} = c'_{n+1} + 2n\,c_n$, with $c'_0$ halved. Then evaluate the new series with Clenshaw. This is cheaper when the same granule is evaluated many times, for example when tabulating frame quantities on a fine grid.
+
+\subsection{Caveats}
+
+\paragraph{Derivative continuity breaks at granule boundaries.} The DE fits enforce continuity of position and velocity across granule boundaries, but not of higher derivatives. Acceleration, and especially jerk, from the series \emph{jump} at every boundary, every few days for the Moon.
+
+The pulsating-frame EOM~\eqref{eq:eom} contains $\ddot l$ and $\dot\omv$, so these jumps inject small discontinuities into the dynamics and the STM. This can disturb adaptive integrators and degrade Newton convergence in shooting. Either stop and restart integration at granule boundaries, or use Method~B.
+
+\paragraph{Differentiation amplifies fit error.} Each derivative multiplies the high-degree truncation error by roughly $n^2$. Velocity and acceleration are adequate for most purposes. Jerk is the least accurate quantity extracted this way.
+
+\subsection{Method B: hybrid (often the better choice)}
+
+Take $\vr$ and $\vv$ from the Chebyshev series. Compute $\va$ and $\vj$ \emph{from a force model} evaluated on those states. Dominant terms are sufficient, since the frame only uses them to define $\omv$ and $\ddot l$:
+\begin{align}
+\va &= -\mu_{EM}\frac{\vr}{r^3} + \va_{\odot,\mathrm{tidal}} + \dots, \\
+\vj &= -\mu_{EM}\left(\frac{\vv}{r^3} - 3\frac{(\vr\cdot\vv)\,\vr}{r^5}\right) + \dot\va_{\odot,\mathrm{tidal}} + \dots
+\end{align}
+The solar tidal term and its derivative follow the same pattern, using the Sun's geocentric and selenocentric positions and velocities from the ephemeris.
+
+\paragraph{Benefits.}
+\begin{itemize}
+  \item Frame quantities are smooth ($C^\infty$) and consistent with real dynamics.
+  \item There is a clean place to choose fidelity: point-mass Sun only, plus planets, plus Earth $J_2$, and so on.
+\end{itemize}
+
+\paragraph{Cost.} There is a small mismatch relative to the full DE force model. Quantify it by comparing against the Chebyshev-derived acceleration away from granule boundaries.
+
+%======================================================================
+\nocite{szebehely1967,gomez_masdemont,deitos_topputo2017,jpl_ephemerides}
+\printbibliography[heading=bibintoc]
+
+%======================================================================
+\appendix
+\section{MATLAB Chebyshev evaluator}
+\label{app:code}
+
+\begin{lstlisting}
+function [p, v, a, j] = cheb_eval(c, t, ta, tb)
+%CHEB_EVAL Evaluate a Chebyshev series and its first three time derivatives.
+%
+%   [p, v, a, j] = cheb_eval(c, t, ta, tb)
+%
+%   c      N x 3 coefficient matrix for one granule (row n+1 = degree n),
+%          columns are the x, y, z components.
+%   t      evaluation time, same units as ta, tb (JD/TDB for DE files)
+%   ta,tb  granule start and end times
+%
+%   p, v, a, j   1x3 position, velocity, acceleration, jerk.
+%                For DE files: km, km/day, km/day^2, km/day^3.
+%
+%   Uses the Chebyshev recurrence differentiated k times:
+%     T_{n+1}^(k) = 2x T_n^(k) + 2k T_n^(k-1) - T_{n-1}^(k)
+%   and the chain rule d^k/dt^k = (2/(tb-ta))^k d^k/dx^k.
+
+N  = size(c, 1);
+dt = tb - ta;
+x  = 2*(t - ta)/dt - 1;              % map to [-1, 1]
+
+T = zeros(N, 4);                     % columns: T, T', T'', T'''
+T(1,1) = 1;                          % T_0 = 1, all derivatives zero
+if N > 1
+    T(2,1) = x;                      % T_1 = x
+    T(2,2) = 1;                      % T_1' = 1
+end
+for m = 2:N-1                        % degree m stored in row m+1
+    T(m+1,1) = 2*x*T(m,1) - T(m-1,1);
+    for k = 1:3
+        T(m+1,k+1) = 2*x*T(m,k+1) + 2*k*T(m,k) - T(m-1,k+1);
+    end
+end
+
+s = 2/dt;
+p =        T(:,1).' * c;
+v = s    * (T(:,2).' * c);
+a = s^2  * (T(:,3).' * c);
+j = s^3  * (T(:,4).' * c);
+end
+\end{lstlisting}
+
+\end{document}
