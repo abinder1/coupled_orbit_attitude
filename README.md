@@ -7,7 +7,7 @@ Simulation code and derivations for coupled orbit-attitude dynamics.
 | Folder | Contents |
 |---|---|
 | `toolbox/+coa/` | Production code, in the `coa` namespace (`coa.orbit.*`, `coa.meas.*`, `coa.filter.*`, `coa.util.*`) |
-| `tests/unit/` | Fast tests of derivation results (limits, symmetries, identities) |
+| `tests/unit/` | Unit tests grouped by toolbox package and examples |
 | `tests/regression/` | Short fixed-seed runs compared against references in `tests/data/` |
 | `derivations/` | LaTeX derivations; equation labels (`eq:...`) are referenced in code comments |
 | `examples/` | Short runnable demos |
@@ -25,6 +25,9 @@ buildtool clean    % delete the XML test and coverage results
 
 Test results and coverage are written to `test_results/`
 (`test-results.xml` and `coverage.xml`).
+The build task recursively discovers unit and regression tests in `tests/`.
+To run all unit tests directly, use
+`runtests('tests/unit', 'IncludeSubfolders', true)`.
 
 ## Test and coverage report
 
