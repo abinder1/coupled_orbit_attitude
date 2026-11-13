@@ -1,7 +1,7 @@
 # Changelog
 
 ## [Unreleased]
-- Initial repository structure, build file, and CI workflow.
+- Initial repository structure, build file, and local Git hooks.
 - Added `coa.filter.ekfUpdate`, a reusable observation-driven Joseph-form EKF
   measurement update, extracted from `examples/tetherFilterDemo.m` (which now
   generates its synthetic observations separately and calls it).

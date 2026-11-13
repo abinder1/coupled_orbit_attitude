@@ -12,14 +12,14 @@ Simulation code and derivations for coupled orbit-attitude dynamics.
 | `derivations/` | LaTeX derivations; equation labels (`eq:...`) are referenced in code comments |
 | `examples/` | Short runnable demos |
 | `scratch/` | Exploratory work; never called from `toolbox/` |
-| `__archive/` | Legacy scripts kept for reference |
+| `.archive/` | Local legacy scripts kept for reference (git-ignored, not tracked) |
 
 ## Usage
 
 Requires MATLAB R2024a or later. From the repository root:
 
 ```matlab
-buildtool          % add toolbox to path, run Code Analyzer, run all tests
+buildtool          % add the repository to the path, run Code Analyzer, run all tests
 buildtool clean    % delete the XML test and coverage results
 ```
 
