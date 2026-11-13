@@ -3,7 +3,7 @@ function plan = buildfile
     % Build plan for coupled_orbit_attitude.
     %   buildtool          -> setup, check, test (default)
     %   buildtool test     -> same as above
-    %   buildtool clean    -> delete build outputs (results/)
+    %   buildtool clean    -> delete the XML test and coverage results in test_results/
     % Requires MATLAB R2024a or later.
     import matlab.buildtool.tasks.*
 
