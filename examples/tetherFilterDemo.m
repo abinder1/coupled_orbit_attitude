@@ -57,6 +57,7 @@ Analysis.runMonteCarloAnalyses(Analysis.monteCarloAnalyses(), monte_carlo, confi
 %% Scenario configuration
 function config = demoConfig()
     % Physical, numerical, and plotting parameters for this example.
+    config.truth_model = "cr3bp";
     config.length_scale = 384400;            % Earth-Moon length unit [km]
     config.time_scale = 375190.258892627;     % Earth-Moon time unit [s]
     config.mu = 0.012150585;                  % Moon's mass fraction

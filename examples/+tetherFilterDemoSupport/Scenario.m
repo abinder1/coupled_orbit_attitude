@@ -36,7 +36,7 @@ classdef Scenario
             % Back-propagate the catch mechanism to initialize a rendezvous payload.
             import tetherFilterDemoSupport.*
             duration = config.duration;
-            tether_rhs = Scenario.dynamicsFunction(config);
+            tether_rhs = Scenario.truthDynamicsFunction(config);
 
             % Body 3 is a placeholder here; it does not affect the tether dynamics.
             placeholder_state = [tether_state(1:6); tether_state(4:6); ...
@@ -58,22 +58,28 @@ classdef Scenario
         function scenario = propagateScenario(initial_state, config)
             % Propagate the nominal initial condition; every trial shares this truth.
             import tetherFilterDemoSupport.*
-            scenario.truth_solution = ode113(Scenario.dynamicsFunction(config), ...
-                                             [0, config.duration], initial_state, ...
-                                             odeset('RelTol', 1e-10, 'AbsTol', 1e-12));
+            scenario.truth_solution = ...
+                ode113(Scenario.truthDynamicsFunction(config), ...
+                       [0, config.duration], initial_state, ...
+                       odeset('RelTol', 1e-10, 'AbsTol', 1e-12));
         end
 
-        function rhs = dynamicsFunction(config, process_noise)
-            % Tethered three-body dynamics; optional process noise gives the packed
-            % state-and-covariance dynamics used by the filter. State-only and
-            % covariance propagation both use the same spring-damper tether model.
-            accel_fn = @(x) coa.orbit.cr3bp(x, config.mu);
-            if nargin < 2
-                process_noise = struct();
+        function rhs = truthDynamicsFunction(config)
+            % Select the truth dynamics model for the filter scenario.
+            import tetherFilterDemoSupport.*
+            switch config.truth_model
+                case "cr3bp"
+                    rhs = Scenario.cr3bpDynamicsFunction(config, struct());
+                otherwise
+                    error('tetherFilterDemoSupport:Scenario:UnknownTruthModel', ...
+                          'Unknown truth model: %s.', config.truth_model);
             end
-            args = {config.mass_2_fraction, config.tether_length_rate, accel_fn, ...
-                    process_noise, config.spring_damper};
-            rhs = @(t, x) coa.orbit.tetheredThreeBodyEkfPropagation(t, x, args{:});
+        end
+
+        function rhs = filterDynamicsFunction(config, process_noise)
+            % The filter dynamics remain the CR3BP model with covariance propagation.
+            import tetherFilterDemoSupport.*
+            rhs = Scenario.cr3bpDynamicsFunction(config, process_noise);
         end
 
         function state = perturbInitialState(initial_state, initial_factor)
@@ -87,6 +93,18 @@ classdef Scenario
             solution = ode113(rhs, [0, duration], state_0, ...
                               odeset('AbsTol', 1e-10, 'RelTol', 1e-10));
             state = solution.y(:, end);
+        end
+
+    end
+
+    methods (Static)
+
+        function rhs = cr3bpDynamicsFunction(config, process_noise)
+            % Construct the CR3BP tether RHS for truth or filter propagation.
+            accel_fn = @(x) coa.orbit.cr3bp(x, config.mu);
+            args = {config.mass_2_fraction, config.tether_length_rate, accel_fn, ...
+                    process_noise, config.spring_damper};
+            rhs = @(t, x) coa.orbit.tetheredThreeBodyEkfPropagation(t, x, args{:});
         end
 
     end

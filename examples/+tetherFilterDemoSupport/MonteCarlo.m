@@ -12,7 +12,7 @@ classdef MonteCarlo
             % own covariance and computes its own gains, so ANEES and NIS test the
             % filter as implemented.
             import tetherFilterDemoSupport.*
-            filter_rhs = Scenario.dynamicsFunction(config, config.process_noise);
+            filter_rhs = Scenario.filterDynamicsFunction(config, config.process_noise);
             abs_tolerance = [1e-10 * ones(18, 1); 1e-24 * ones(324, 1)];
             filter_options = odeset('RelTol', 1e-9, 'AbsTol', abs_tolerance);
             velocity_scale = config.length_scale / config.time_scale;

@@ -8,7 +8,7 @@ classdef Filter
                                         initial_covariance, config)
             % Propagate to each measurement, update, then continue from the posterior.
             import tetherFilterDemoSupport.*
-            filter_rhs = Scenario.dynamicsFunction(config, config.process_noise);
+            filter_rhs = Scenario.filterDynamicsFunction(config, config.process_noise);
             abs_tolerance = [1e-10 * ones(18, 1); 1e-24 * ones(324, 1)];
             filter_options = odeset('RelTol', 1e-9, 'AbsTol', abs_tolerance);
 
