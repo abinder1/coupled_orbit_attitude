@@ -29,11 +29,27 @@ The build task recursively discovers unit and regression tests in `tests/`.
 To run all unit tests directly, use
 `runtests('tests/unit', 'IncludeSubfolders', true)`.
 
-## Ephemeris-truth dependency and setup
+## Ephemeris-truth integration and setup
 
-The filter demo's ephemeris-truth mode uses the `emframe` library tracked as a
+Ephemeris truth is under integration; the current filter demo supports CR3BP
+truth only. The planned ephemeris mode uses the `emframe` library tracked as a
 Git submodule at `external/ephem_integrator`. This repository pins the exact
-library commit; initialize the submodule before running the demo.
+library commit; initialize the submodule before using the dependency.
+
+### Planned truth and filter frame
+
+The ephemeris truth and filter states will use the instantaneous Earth–Moon
+rotating axes, centered at the Earth–Moon barycenter, with the fixed COA length
+and time scales. These axes follow the actual Earth–Moon direction and orbital
+plane. They are not pulsating coordinates: the length scale does not vary
+with Earth–Moon separation.
+
+The filter will retain the CR3BP equations as an approximation in these same
+axes. Those equations assume fixed primary positions and unit frame rate, while
+the ephemeris truth includes changing separation and frame motion. Truth and
+filter states can therefore be compared directly in their shared coordinates;
+the differences in their dynamics remain part of the model mismatch. Initial
+states are mapped numerically without a frame-rate velocity correction.
 
 ### First clone
 
