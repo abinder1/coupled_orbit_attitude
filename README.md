@@ -56,6 +56,18 @@ revolution per 55 minutes about the initial rotating-frame +z axis, converted
 using the fixed time scale, and adjusted for the actual initial frame rate.
 The spin is an initial condition, not a prescribed rate throughout propagation.
 
+The default 24-hour truth window starts at ET 850243598.7593319 seconds
+(2026-12-11 06:45:29.576 UTC). The ephemeris force model uses all 11 supported
+attractors and solar 1PN. The filter remains CR3BP; neither measurements nor
+error calculations transform the shared rotating-frame coordinates.
+
+With the default fixed process noise and 100 Monte Carlo runs, the ephemeris
+truth case was strongly inconsistent: whole-state ANEES rose from 55.6 at the
+first update to 2.62e11 at the sixth (95% region approximately 16.8--19.2).
+This is a specific comparison, not a validated performance guarantee. A
+switch to a pulsating rotating frame may reduce the inconsistency, but this
+requires explicit investigation after that change.
+
 ### First clone
 
 ```powershell

@@ -6,6 +6,8 @@
   remains selectable. The ephemeris model uses the default 11 attractors and
   solar 1PN, configured from local DE440 ASCII files. The initial tether spin
   accounts for the instantaneous frame rate.
+- Documented the ephemeris truth and CR3BP filter frame contract, initial spin,
+  and observed consistency limitations in the demo and EKF derivation.
 - `coa.orbit.tetherAccel`, `tetherSpringDamperAccel`, and
   `tetheredThreeBodyEkfPropagation` now use acceleration callbacks with
   signature `accel_fn(time, state)`. `tetherAccel` now takes time as its

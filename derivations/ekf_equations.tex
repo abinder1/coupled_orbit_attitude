@@ -59,6 +59,20 @@
 with $\bm{w}$ and $\bm{v}_k$ zero-mean, mutually uncorrelated, and
 uncorrelated with $\x(t_0)\sim\mathcal{N}(\xh_0,\Pm_0)$, $\Pm_0\succ 0$.
 
+\paragraph{Filter-demo model mismatch.}
+In \texttt{tetherFilterDemo}, the default deterministic truth uses the
+ephemeris Earth--Moon barycentric rotating dynamics and COA tether coupling;
+the EKF propagates the CR3BP model and its state Jacobian. Both states use
+instantaneous Earth--Moon rotating axes with fixed length and time scales, so
+measurements, innovations, and errors use the truth coordinates directly.
+The CR3BP fixed-primary, unit-frame-rate equations are an approximation in
+these axes, not a coordinate conversion of the ephemeris dynamics. The
+initial center-of-mass state is mapped numerically; the tether's initial
+55-minute inertial spin is converted to the scaled rotating velocity using
+the initial ephemeris frame rate. Truth does not include random process-noise
+realizations even though covariance propagation includes process noise.
+CR3BP truth remains selectable for a matched-model comparison.
+
 Jacobians:
 \begin{equation}
   \Fm(t) = \left.\frac{\partial \bm{f}}{\partial \x}\right|_{\xh(t)}, \qquad
@@ -568,9 +582,10 @@ The distribution is expressed in a frame defined by the tether geometry:
   \label{eq:tether-frame}
 \end{equation}
 For a spinning tether $\hat{\mathbf{e}}_1$ is along the tether, $\hat{\mathbf{e}}_3$
-is the spin axis, and $\hat{\mathbf{e}}_2$ is the in-plane transverse direction.
+is its spin axis as observed in the scenario's rotating axes, and
+$\hat{\mathbf{e}}_2$ is the in-plane transverse direction.
 Let $\mathbf{C}$ have rows $\hat{\mathbf{e}}_1^\top,\hat{\mathbf{e}}_2^\top,
-\hat{\mathbf{e}}_3^\top$ (resolved in the CR3BP rotating frame, in which
+\hat{\mathbf{e}}_3^\top$ (resolved in the scenario's rotating frame, in which
 the state and the velocities $\mathbf{v}_i$ are expressed). Then
 \begin{equation}
   \bm{d}_{\mathrm{tf}} = \mathrm{blkdiag}(\mathbf{C},\mathbf{C})\,\bm{d}, \qquad
@@ -599,13 +614,13 @@ the state and the velocities $\mathbf{v}_i$ are expressed). Then
 
 \paragraph{Evaluation times.}
 The procedure is applied at two final-time endpoints, each with its own figure
-and table: the last measurement update ($t=110$ min), and the end of the
-scenario ($t=120$ min, a 10-minute coast after the last update), which is a
+and table: the last measurement update ($t=1410$ min), and the end of the
+scenario ($t=1440$ min, a 30-minute coast after the last update), which is a
 prediction only. At the second endpoint the reference run's estimate and
 covariance are the filter's open-loop prediction from $K$, so $\Pm$ includes
 process noise accumulated over the final leg, while the simulated truth carries
 none. Sample spreads below the predicted values are therefore expected there.
-Each Monte Carlo run is propagated from its last posterior to $t=120$ min
+Each Monte Carlo run is propagated from its last posterior to $t=1440$ min
 without drawing any further random numbers, so no earlier result changes.
 
 \paragraph{Caveats.}

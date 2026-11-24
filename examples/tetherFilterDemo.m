@@ -11,6 +11,12 @@
 %     Body 1 = counterweight, 2 = catch mechanism, 3 = payload.
 %   Ephemeris truth and the CR3BP filter use the instantaneous Earth-Moon
 %   rotating axes with fixed scaling. With CR3BP truth, both use CR3BP axes.
+%   Ephemeris truth defaults to all 11 supported attractors and solar 1PN over
+%   a 24-hour window starting at ET 850243598.7593319 s. It requires local
+%   DE440 files configured as described in the repository README. Set
+%   config.truth_model to "cr3bp" to use the CR3BP truth model instead.
+%   The 55-minute inertial tether spin is an initial condition, corrected for
+%   the frame rate at the initial epoch, not a prescribed spin history.
 %   The tether truth and EKF use the critically damped spring-damper model;
 %   process noise is included in covariance propagation, but not simulated as
 %   a random realization in the truth trajectory. Measurement updates use an
