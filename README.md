@@ -155,9 +155,9 @@ wrap during an EKF update. It uses the same group order as `measurementModels`.
 `coa.meas.measurementCovariances(length_scale, speed_scale)` supplies nominal
 measurement-noise covariances using characteristic scales in km and km/s.
 Both scales must be finite and positive. These covariances describe sample
-noise, not sensor bias or drift. Candidate
-accelerometers in sensor-table rows 20-22 of `derivations/ekf_equations.tex`
-are not implemented in the current measurement model.
+noise, not sensor bias or drift. The sensor table in
+`derivations/ekf_equations.tex` lists every implemented sensor by group and
+mask bit, with these nominal noise values.
 
 ## Filter update
 

@@ -1,6 +1,14 @@
 # Changelog
 
 ## [Unreleased]
+- `derivations/ekf_equations.tex`: the sensor table now follows
+  `coa.meas.measurementModels`. Sensors are grouped and ordered by mask bit,
+  with each group's bit, mask value and row count, and each sensor's stacked
+  rows and nominal noise from `coa.meas.measurementCovariances`. Crosslink
+  rows are renumbered to the code's order (13-14 range, 15-16 Doppler) and use
+  its vectors, `r2 - r3` and `r2 - r1`. The unimplemented accelerometer
+  candidates (old rows 20-22) are removed. Code comments and README updated to
+  match.
 - Initial repository structure, build file, and local Git hooks.
 - Added `coa.filter.ekfUpdate`, a reusable observation-driven Joseph-form EKF
   measurement update, extracted from `examples/tetherFilterDemo.m` (which now

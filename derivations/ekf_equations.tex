@@ -1,4 +1,5 @@
 \documentclass[]{article}
+\PassOptionsToPackage{table}{xcolor}
 
 %%%%%%%%%%%%% Package imports %%%%%%%%%%%%%
 \usepackage[T1]{fontenc}
@@ -13,6 +14,7 @@
 \usepackage{graphicx}
 \usepackage{longtable}
 \usepackage{booktabs}
+\usepackage{xcolor}
 \usepackage{bm}
 \usepackage{bbm}
 \usepackage{hyperref}
@@ -357,70 +359,77 @@ the nominal trajectory.
 
 \section{Sensors}\label{sec:sensors}
 
-Table~\ref{tab:sensor_list} lists candidate sensors; the model listing below
-defines their idealized measurement equations. The current implementation in
-\texttt{coa.meas.measurementModels} covers sensors 1--19 in eight selectable
-groups. Sensors 20--22 are accelerometer candidates only and are not currently
-implemented.
+Table~\ref{tab:sensor_list} lists the sensors implemented in
+\texttt{coa.meas.measurementModels}; the model listing below defines their
+measurement equations. The sensors form eight groups selected by the bits of
+\texttt{mask}: group $k$ is bit $k-1$, i.e.\ mask value $2^{k-1}$. The table
+follows the code's order: groups by ascending bit, and sensors and rows within
+a group in the order they are stacked in $\bm{h}$. Sensor numbers count the
+stacked order with every group selected (\texttt{mask = 255}). The noise
+values are the nominal $1\sigma$ accuracies from
+\texttt{coa.meas.measurementCovariances}, named by their \texttt{meas\_covs}
+field. Bodies are the tether end~$\mathbf{r}_1$, the catch
+mechanism~$\mathbf{r}_2$ and the payload~$\mathbf{r}_3$.
+
+\definecolor{groupband}{gray}{0.88}
+\newlength{\sensorcolS}
+\newlength{\sensorcolM}
+\newlength{\sensorcolN}
+\newcommand{\sensorgroup}[5]{%
+  \multicolumn{5}{@{}>{\columncolor{groupband}[0pt][0pt]}p{\linewidth}@{}}{\rule{0pt}{2.6ex}\textbf{Group #1}
+    \ \ $\cdot$\ \ bit #2\ \ $\cdot$\ \ mask #3\ \ $\cdot$\ \ #4
+    \hfill\textit{#5}\ }\\[0.3ex]}
 
 {\footnotesize
-\setlength{\tabcolsep}{3pt}
-\renewcommand{\arraystretch}{1.15}
-\begin{longtable}{@{}r p{0.38\linewidth} p{0.20\linewidth} p{0.16\linewidth} p{0.12\linewidth}@{}}
-\caption{Candidate sensors.}\label{tab:sensor_list}\\
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.25}
+\setlength{\sensorcolM}{0.31\linewidth}
+\setlength{\sensorcolN}{0.21\linewidth}
+\setlength{\sensorcolS}{\dimexpr\linewidth-\sensorcolM-\sensorcolN-4.2em-8\tabcolsep\relax}
+\begin{longtable}{@{}>{\raggedleft\arraybackslash}p{1.6em}
+  >{\raggedright\arraybackslash}p{\sensorcolS}
+  >{\raggedright\arraybackslash}p{\sensorcolM}
+  >{\centering\arraybackslash}p{2.6em}
+  >{\raggedright\arraybackslash}p{\sensorcolN}@{}}
+\caption{Implemented sensors, ordered by measurement group and mask bit.}
+\label{tab:sensor_list}\\
 \toprule
-\# & Sensor & Sensor model & Jacobian & Cadence \\
+\# & Sensor & Measurement model & Rows & Noise ($1\sigma$) \\
 \midrule
 \endfirsthead
 \toprule
-\# & Sensor & Sensor model & Jacobian & Cadence \\
+\# & Sensor & Measurement model & Rows & Noise ($1\sigma$) \\
 \midrule
 \endhead
 \bottomrule
 \endlastfoot
-1 & Ground optical angles, $\mathbf{r}_1$ & $\begin{aligned}\alpha &= h_1(\mathbf{r}_1) \\ \delta &= h_2(\mathbf{r}_1) \end{aligned}$ & & \\
-\midrule
-2 & Ground optical angles, $\mathbf{r}_2$ & $\begin{aligned}\alpha &= h_1(\mathbf{r}_2) \\ \delta &= h_2(\mathbf{r}_2) \end{aligned}$ & & \\
-\midrule
-3 & Ground optical angles, $\mathbf{r}_3$ & $\begin{aligned}\alpha &= h_1(\mathbf{r}_3) \\ \delta &= h_2(\mathbf{r}_3) \end{aligned}$ & & \\
-\midrule
-4 & Optical relative-geometry angles, $\mathbf{r}_2 - \mathbf{r}_3$ & $\begin{aligned}\alpha &= h_1(\mathbf{r}_2 - \mathbf{r}_3) \\ \delta &= h_2(\mathbf{r}_2 - \mathbf{r}_3) \end{aligned}$ & & \\
-\midrule
-5 & Star trackers, tether orientation, $\mathbf{r}_2 - \mathbf{r}_1$ & $\begin{aligned}\alpha &= h_1(\mathbf{r}_2 - \mathbf{r}_1) \\ \delta &= h_2(\mathbf{r}_2 - \mathbf{r}_1) \end{aligned}$ & & \\
-\midrule
-6 & Optical angular size of tether in payload sky, $\mathbf{r}_1, \mathbf{r}_2, \mathbf{r}_3$ & $\theta = h_3(\mathbf{r}_1, \mathbf{r}_2, \mathbf{r}_3)$ & & \\
-\midrule
-7 & DSN ground radar range, $\mathbf{r}_1$ & $r = h_4(\mathbf{r}_1)$ & & \\
-\midrule
-8 & DSN ground radar range, $\mathbf{r}_2$ & $r = h_4(\mathbf{r}_2)$ & & \\
-\midrule
-9 & DSN ground radar range, $\mathbf{r}_3$ & $r = h_4(\mathbf{r}_3)$ & & \\
-\midrule
-10 & DSN ground radar range rate, $\mathbf{r}_1$ & $\dot{r} = h_5(\mathbf{r}_1, \dot{\mathbf{r}}_1)$ & & \\
-\midrule
-11 & DSN ground radar range rate, $\mathbf{r}_2$ & $\dot{r} = h_5(\mathbf{r}_2, \dot{\mathbf{r}}_2)$ & & \\
-\midrule
-12 & DSN ground radar range rate, $\mathbf{r}_3$ & $\dot{r} = h_5(\mathbf{r}_3, \dot{\mathbf{r}}_3)$ & & \\
-\midrule
-13 & Dedicated RF ranging crosslink, tether length, $\mathbf{r}_2 - \mathbf{r}_1$ & $ r = h_4(\mathbf{r}_2 - \mathbf{r}_1)$ & & \\
-\midrule
-14 & Doppler from RF ranging crosslink, $\dot{L}$, $\mathbf{r}_2 - \mathbf{r}_1$ & $\dot{r} = h_5(\mathbf{r}_2 - \mathbf{r}_1, \dot{\mathbf{r}}_2 - \dot{\mathbf{r}}_1)$ & & \\
-\midrule
-15 & Dedicated RF ranging crosslink, payload relative position, $\mathbf{r}_3 - \mathbf{r}_2$ & $ r = h_4(\mathbf{r}_3 - \mathbf{r}_2)$ & & \\
-\midrule
-16 & Doppler from RF ranging crosslink, payload relative in-track speed, $\mathbf{r}_3 - \mathbf{r}_2$ & $\dot{r} = h_5(\mathbf{r}_3 - \mathbf{r}_2, \dot{\mathbf{r}}_3 - \dot{\mathbf{r}}_2)$ & & \\
-\midrule
-17 & Lunar PN\&T/GNSS-like position fix, $\mathbf{r}_1$ & $\mathbf{r}_1$ & & \\
-\midrule
-18 & Lunar PN\&T/GNSS-like position fix, $\mathbf{r}_2$ & $\mathbf{r}_2$ & & \\
-\midrule
-19 & Lunar PN\&T/GNSS-like position fix, $\mathbf{r}_3$ & $\mathbf{r}_3$ & & \\
-\midrule
-20 & Candidate accelerometer on $m_1$ (not implemented) & Noise plus bias & & \\
-\midrule
-21 & Candidate accelerometer on $m_2$ (not implemented) & Noise plus bias & & \\
-\midrule
-22 & Candidate accelerometer on $m_3$ (not implemented) & Noise plus bias & & \\
+\sensorgroup{1}{0}{1}{Ground optical angles}{6 rows of $\bm{h}$}
+1 & Ground optical angles of $\mathbf{r}_1$ & $(\alpha,\delta) = (h_1,h_2)(\mathbf{r}_1)$ & 1--2 & 2\,arcsec\newline\texttt{ground\_angles} \\
+2 & Ground optical angles of $\mathbf{r}_2$ & $(\alpha,\delta) = (h_1,h_2)(\mathbf{r}_2)$ & 3--4 & same \\
+3 & Ground optical angles of $\mathbf{r}_3$ & $(\alpha,\delta) = (h_1,h_2)(\mathbf{r}_3)$ & 5--6 & same \\
+\sensorgroup{2}{1}{2}{Camera / star-tracker angles}{4 rows of $\bm{h}$}
+4 & Onboard camera angles of the catch mechanism from the payload & $(\alpha,\delta) = (h_1,h_2)(\mathbf{r}_2-\mathbf{r}_3)$ & 1--2 & 5\,arcsec\newline\texttt{camera\_angles} \\
+5 & Star-tracker angles of the tether orientation & $(\alpha,\delta) = (h_1,h_2)(\mathbf{r}_2-\mathbf{r}_1)$ & 3--4 & 10\,arcsec\newline\texttt{star\_tracker\_angles} \\
+\sensorgroup{3}{2}{4}{Camera angular size}{1 row of $\bm{h}$}
+6 & Onboard camera angular size of the tether in the payload's sky & $\theta = h_3(\mathbf{r}_1-\mathbf{r}_3,\ \mathbf{r}_2-\mathbf{r}_3)$ & 1 & $\sqrt{2}\cdot5$\,arcsec\newline\texttt{camera\_angular\_size} \\
+\sensorgroup{4}{3}{8}{DSN range}{3 rows of $\bm{h}$}
+7 & DSN ground radar range to $\mathbf{r}_1$ & $r = h_4(\mathbf{r}_1)$ & 1 & 10\,m\newline\texttt{dsn\_range} \\
+8 & DSN ground radar range to $\mathbf{r}_2$ & $r = h_4(\mathbf{r}_2)$ & 2 & same \\
+9 & DSN ground radar range to $\mathbf{r}_3$ & $r = h_4(\mathbf{r}_3)$ & 3 & same \\
+\sensorgroup{5}{4}{16}{DSN range rate}{3 rows of $\bm{h}$}
+10 & DSN ground radar range rate of body~1 & $\dot{r} = h_5(\mathbf{r}_1,\ \mathbf{v}_1)$ & 1 & 1\,mm/s\newline\texttt{dsn\_range\_rate} \\
+11 & DSN ground radar range rate of body~2 & $\dot{r} = h_5(\mathbf{r}_2,\ \mathbf{v}_2)$ & 2 & same \\
+12 & DSN ground radar range rate of body~3 & $\dot{r} = h_5(\mathbf{r}_3,\ \mathbf{v}_3)$ & 3 & same \\
+\sensorgroup{6}{5}{32}{Crosslink range}{2 rows of $\bm{h}$}
+13 & RF crosslink range, payload to catch mechanism & $r = h_4(\mathbf{r}_2-\mathbf{r}_3)$ & 1 & 1\,m\newline\texttt{crosslink\_range} \\
+14 & RF crosslink range, catch mechanism to tether end (tether length) & $r = h_4(\mathbf{r}_2-\mathbf{r}_1)$ & 2 & same \\
+\sensorgroup{7}{6}{64}{Crosslink range rate}{2 rows of $\bm{h}$}
+15 & RF crosslink Doppler, payload to catch mechanism & $\dot{r} = h_5(\mathbf{r}_2-\mathbf{r}_3,\ \mathbf{v}_2-\mathbf{v}_3)$ & 1 & 1\,mm/s\newline\texttt{crosslink\_range\_rate} \\
+16 & RF crosslink Doppler, catch mechanism to tether end (tether length rate) & $\dot{r} = h_5(\mathbf{r}_2-\mathbf{r}_1,\ \mathbf{v}_2-\mathbf{v}_1)$ & 2 & same \\
+\sensorgroup{8}{7}{128}{GNSS position}{9 rows of $\bm{h}$}
+17 & Lunar PN\&T/GNSS position fix of $\mathbf{r}_1$ & $\mathbf{z} = h_6(\mathbf{r}_1)$ & 1--3 & 10\,m per axis\newline\texttt{gnss\_position} \\
+18 & Lunar PN\&T/GNSS position fix of $\mathbf{r}_2$ & $\mathbf{z} = h_6(\mathbf{r}_2)$ & 4--6 & same \\
+19 & Lunar PN\&T/GNSS position fix of $\mathbf{r}_3$ & $\mathbf{z} = h_6(\mathbf{r}_3)$ & 7--9 & same \\
 \end{longtable}
 }
 
@@ -507,9 +516,7 @@ The lunar PN\&T position measurement is
   \pd{\mathbf{z}_{\mathrm{PN\&T}}}{\boldsymbol{\rho}}=\mathbf{I}_3.
   \label{eq:measurement-pnt}
 \end{equation}
-It measures position only. The current model does not include an
-accelerometer/IMU measurement equation or bias state for candidate sensors
-20--22.
+It measures position only.
 
 \section{Relative Payload--Catch-Mechanism State in the Tether Frame}
 \label{sec:relative-state}
@@ -544,7 +551,7 @@ when the two bodies' errors are positively correlated, so $\Pm_{d}$ cannot be
 formed from the per-body blocks alone. For the Monte Carlo error samples
 $\bm{e}^{(i)} = \x^{(i)} - \xh^{(i)}$ the same map applies,
 $\bm{e}_d^{(i)} = \mathbf{T}\bm{e}^{(i)}$, so the relative-state samples
-reuse the existing runs. The sensors in rows 15 and 16 of
+reuse the existing runs. Sensors 4, 13 and 15 of
 Table~\ref{tab:sensor_list} observe $\bm{d}$ directly, and their Jacobians
 factor through it, $\Hm = (\partial\bm{h}/\partial\bm{d})\,\mathbf{T}$
 (Sec.~\ref{sec:sensors}).

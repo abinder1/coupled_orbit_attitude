@@ -52,9 +52,9 @@ function [h, dh_dstate, noise_cov] = measurementModels(state, mask, meas_covs)
     %   function, append its handle to groupFunctions, and add its metadata to
     %   coa.meas.measurementGroups in the same order.
     %
-    %   Only sensor rows 1-19 in Sec. C of derivations/ekf_equations.tex are
-    %   implemented. Accelerometers in rows 20-22 are candidates only; they
-    %   are not measurement groups in this function.
+    %   Sensor numbers in the group comments below are the rows of the sensor
+    %   table (tab:sensor_list) in derivations/ekf_equations.tex, which lists
+    %   the groups in this order.
     arguments
         state (18, 1) double {mustBeFinite}
         mask (1, 1) double {mustBeInteger, mustBeNonnegative}
@@ -208,7 +208,7 @@ end
 
 function [h, dh_dstate, noise_cov] = ...
         crosslinkRange(state, meas_covs, compute_jacobian)
-    % Group 6: RF crosslink range (Eq. eq:measurement-range, sensors 13 and 15).
+    % Group 6: RF crosslink range (Eq. eq:measurement-range, sensors 13-14).
     %   Row 1: payload to catch mechanism, |r2 - r3|.
     %   Row 2: catch mechanism to tether end, |r2 - r1|.
     h = zeros(2, 1);
@@ -235,7 +235,7 @@ end
 function [h, dh_dstate, noise_cov] = ...
         crosslinkRangeRate(state, meas_covs, compute_jacobian)
     % Group 7: RF crosslink Doppler, i.e. range rate
-    % (Eq. eq:measurement-range-rate, sensors 14 and 16).
+    % (Eq. eq:measurement-range-rate, sensors 15-16).
     %   Row 1: payload to catch mechanism, using r2 - r3 and v2 - v3.
     %   Row 2: catch mechanism to tether end, using r2 - r1 and v2 - v1.
     h = zeros(2, 1);

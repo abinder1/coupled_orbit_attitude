@@ -4,7 +4,7 @@ function [z, dz_drho] = pnt(rho)
     % PNT Direct position measurement (lunar PN&T).
     %   z = coa.meas.pnt(rho) returns the 3x1 measurement z = rho for the 3x1
     %   position rho. Implements the lunar PN&T rows (17-19) of the sensor
-    %   table in Sec. C of derivations/ekf_equations.tex. Only position is
+    %   table (tab:sensor_list) in derivations/ekf_equations.tex. Only position is
     %   measured; no velocity measurement is available. The output uses the
     %   same coordinate frame and units as rho.
     %
