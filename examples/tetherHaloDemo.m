@@ -66,7 +66,7 @@ labels = ["Reel in, $\dot{L} = -0.5$ m/s", ...
 % The physics of a single unconstrained particle. The tether model calls this
 % once per mass, so any other force model with the same signature (including
 % Jacobians when requested) can be swapped in.
-accel_fn = @(x) coa.orbit.cr3bp(x, mu);
+accel_fn = @(~, x) coa.orbit.cr3bp(x, mu);
 
 % Critically damped spring-damper tether (k = wn^2, c = 2 * wn, wn = spin
 % rate) driving the length toward L(t) = L0 + Ldot * t from t = 0. Set
@@ -140,7 +140,7 @@ function sv_dot = tetherDynamics(t, sv, eta, length_dot, accel_fn, spring_damper
     x_cm = sv([4:6, 10:12]);
 
     if isempty(fieldnames(spring_damper))
-        a = coa.orbit.tetherAccel(x_cw, x_cm, eta, length_dot, accel_fn);
+        a = coa.orbit.tetherAccel(t, x_cw, x_cm, eta, length_dot, accel_fn);
     else
         a = coa.orbit.tetherSpringDamperAccel(t, x_cw, x_cm, eta, ...
                                               spring_damper.initial_length, ...

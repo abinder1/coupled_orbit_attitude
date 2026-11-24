@@ -85,12 +85,39 @@ classdef TetheredThreeBodyEkfPropagationTest < matlab.unittest.TestCase
             tc.verifyEqual(d_packed(1:18), d_state);
         end
 
-        function ignoresNormalizedTime(tc, state)
+        function timeIndependentAccelerationIgnoresTime(tc, state)
             [~, P, fn, noise] = defaultInputs();
             packed = [state; P(:)];
             d0 = ekf(0, packed, 0.3, 0.1, fn, noise);
             d1 = ekf(7.5, packed, 0.3, 0.1, fn, noise);
             tc.verifyEqual(d1, d0);
+        end
+
+        function timeDependentAccelerationUsesCurrentTimeAndJacobians(tc)
+            [state, ~, ~, ~, no_noise] = defaultInputs();
+            fn = @timeDependentAccel;
+            eta = 0.3;
+            models = {struct(), struct("initial_length", 0.1, ...
+                                       "stiffness", 3, "damping", 4)};
+            [x1, x2, x3] = bodyStates(state);
+            for model = models
+                spring = model{1};
+                for t = [0.2, 0.7]
+                    d = ekf(t, state, eta, 0.05, fn, struct(), spring);
+                    free = (1 - eta) * fn(t, x1) + eta * fn(t, x2);
+                    tc.verifyEqual((1 - eta) * d(10:12) + eta * d(13:15), ...
+                                   free, "AbsTol", 1e-12);
+                    tc.verifyEqual(d(16:18), fn(t, x3), "AbsTol", 1e-12);
+
+                    packed = [state; reshape(eye(18), [], 1)];
+                    packed_derivative = ekf(t, packed, eta, 0.05, fn, ...
+                                            no_noise, spring);
+                    state_rhs = @(x) ekf(t, x, eta, 0.05, fn, struct(), spring);
+                    jacobian = centralDifferenceJacobian(state_rhs, state);
+                    tc.verifyEqual(reshape(packed_derivative(19:end), [18, 18]), ...
+                                   jacobian + jacobian', "AbsTol", 1e-8);
+                end
+            end
         end
 
         function worksAsOdeFunction(tc, state)
@@ -112,7 +139,7 @@ classdef TetheredThreeBodyEkfPropagationTest < matlab.unittest.TestCase
                                                          0.05, 3, 4, fn);
             tc.verifyEqual(d(1:9), state(10:18));
             tc.verifyEqual(d(10:15), expected);
-            tc.verifyEqual(d(16:18), fn(x3));
+            tc.verifyEqual(d(16:18), fn(0.2, x3));
         end
 
         function springDamperCovarianceUsesItsJacobian(tc, state)
@@ -153,13 +180,13 @@ classdef TetheredThreeBodyEkfPropagationTest < matlab.unittest.TestCase
             d = ekf(0, state, mass_2_fraction, tether_length_rate, fn);
 
             [x1, x2, x3] = bodyStates(state);
-            tether_acceleration = coa.orbit.tetherAccel(x1, x2, ...
+            tether_acceleration = coa.orbit.tetherAccel(0, x1, x2, ...
                                                         mass_2_fraction, ...
                                                         tether_length_rate, fn);
 
             tc.verifyEqual(d(1:9), state(10:18));
             tc.verifyEqual(d(10:15), tether_acceleration);
-            tc.verifyEqual(d(16:18), fn(x3));
+            tc.verifyEqual(d(16:18), fn(0, x3));
         end
 
         function body3IsDecoupledFromTether(tc, state)
@@ -326,7 +353,7 @@ function [x, covariance, fn, noise, no_noise] = defaultInputs()
     x = [0.3; 0.2; 0.1; 0.35; 0.1; 0.15; -0.5; 0.4; 0.2; ...
          0.01; -0.03; 0.04; -0.02; 0.05; 0.0; 0.1; 0.0; -0.1];
     covariance = 1e-4 * eye(18);
-    fn = @(state) coa.orbit.cr3bp(state, 0.0121505856);
+    fn = @(~, state) coa.orbit.cr3bp(state, 0.0121505856);
     noise = struct("tension_psd", 1e-6, "transverse_psd", 2e-7, ...
                    "body_3_acceleration_psd", 3e-7);
     no_noise = struct("tension_psd", 0, "transverse_psd", 0, ...
@@ -337,6 +364,14 @@ function [x1, x2, x3] = bodyStates(state)
     x1 = state([1:3, 10:12]);
     x2 = state([4:6, 13:15]);
     x3 = state([7:9, 16:18]);
+end
+
+function [a, da_dp, da_dv] = timeDependentAccel(t, state)
+    a = (1 + t) * state(1:3) + (2 - t) * state(4:6);
+    if nargout > 1
+        da_dp = (1 + t) * eye(3);
+        da_dv = (2 - t) * eye(3);
+    end
 end
 
 function covariance = randomCovariance()

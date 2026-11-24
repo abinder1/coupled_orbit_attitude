@@ -1,6 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+- `coa.orbit.tetherAccel`, `tetherSpringDamperAccel`, and
+  `tetheredThreeBodyEkfPropagation` now use acceleration callbacks with
+  signature `accel_fn(time, state)`. `tetherAccel` now takes time as its
+  first argument; covariance propagation still requires state Jacobians.
 - `derivations/ekf_equations.tex`: the sensor table now follows
   `coa.meas.measurementModels`. Sensors are grouped and ordered by mask bit,
   with each group's bit, mask value and row count, and each sensor's stacked

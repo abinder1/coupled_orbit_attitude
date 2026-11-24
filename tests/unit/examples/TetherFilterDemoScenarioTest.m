@@ -63,7 +63,7 @@ function [config, state, process_noise] = inputs()
 end
 
 function rhs = legacyRhs(config, process_noise)
-    accel_fn = @(x) coa.orbit.cr3bp(x, config.mu);
+    accel_fn = @(~, x) coa.orbit.cr3bp(x, config.mu);
     propagate = @coa.orbit.tetheredThreeBodyEkfPropagation;
     args = {config.mass_2_fraction, config.tether_length_rate, ...
             accel_fn, process_noise, config.spring_damper};

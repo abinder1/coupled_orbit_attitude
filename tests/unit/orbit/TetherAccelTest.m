@@ -22,42 +22,47 @@ classdef TetherAccelTest < matlab.unittest.TestCase
 
         function rejectsInvalidStates(tc, bad_state)
             [x1, x2, fn] = defaultInputs();
-            tc.verifyError(@() coa.orbit.tetherAccel(bad_state, x2, 0.3, 0.1, fn), ...
+            tc.verifyError(@() coa.orbit.tetherAccel(0, bad_state, x2, ...
+                                                     0.3, 0.1, fn), ...
                            ?MException);
-            tc.verifyError(@() coa.orbit.tetherAccel(x1, bad_state, 0.3, 0.1, fn), ...
+            tc.verifyError(@() coa.orbit.tetherAccel(0, x1, bad_state, ...
+                                                     0.3, 0.1, fn), ...
                            ?MException);
         end
 
         function rejectsInvalidEta(tc, bad_scalar)
             [x1, x2, fn] = defaultInputs();
-            tc.verifyError(@() coa.orbit.tetherAccel(x1, x2, bad_scalar, 0.1, fn), ...
+            tc.verifyError(@() coa.orbit.tetherAccel(0, x1, x2, ...
+                                                     bad_scalar, 0.1, fn), ...
                            ?MException);
         end
 
         function rejectsInvalidLengthDot(tc, bad_scalar)
             [x1, x2, fn] = defaultInputs();
-            tc.verifyError(@() coa.orbit.tetherAccel(x1, x2, 0.3, bad_scalar, fn), ...
+            tc.verifyError(@() coa.orbit.tetherAccel(0, x1, x2, ...
+                                                     0.3, bad_scalar, fn), ...
                            ?MException);
         end
 
         function rejectsNonFunctionHandle(tc)
             [x1, x2] = defaultInputs();
-            tc.verifyError(@() coa.orbit.tetherAccel(x1, x2, 0.3, 0.1, 1), ?MException);
+            tc.verifyError(@() coa.orbit.tetherAccel(0, x1, x2, 0.3, 0.1, 1), ...
+                           ?MException);
         end
 
         function rejectsTooFewInputs(tc)
             [x1, x2] = defaultInputs();
-            tc.verifyError(@() coa.orbit.tetherAccel(x1, x2, 0.3, 0.1), ?MException);
+            tc.verifyError(@() coa.orbit.tetherAccel(0, x1, x2, 0.3, 0.1), ?MException);
         end
 
         % (2) Output handling via nargout
 
         function outputSizes(tc, states, eta, length_dot)
             [x1, x2, fn] = unpackInputs(states);
-            a = coa.orbit.tetherAccel(x1, x2, eta, length_dot, fn);
+            a = coa.orbit.tetherAccel(0, x1, x2, eta, length_dot, fn);
             tc.verifySize(a, [6, 1]);
 
-            [a, da_dp, da_dv] = coa.orbit.tetherAccel(x1, x2, eta, length_dot, fn);
+            [a, da_dp, da_dv] = coa.orbit.tetherAccel(0, x1, x2, eta, length_dot, fn);
             tc.verifySize(a, [6, 1]);
             tc.verifySize(da_dp, [6, 6]);
             tc.verifySize(da_dv, [6, 6]);
@@ -65,9 +70,9 @@ classdef TetherAccelTest < matlab.unittest.TestCase
 
         function outputsConsistentAcrossNargout(tc, states, eta, length_dot)
             [x1, x2, fn] = unpackInputs(states);
-            a1 = coa.orbit.tetherAccel(x1, x2, eta, length_dot, fn);
-            [a2, da_dp2] = coa.orbit.tetherAccel(x1, x2, eta, length_dot, fn);
-            [a3, da_dp3, ~] = coa.orbit.tetherAccel(x1, x2, eta, length_dot, fn);
+            a1 = coa.orbit.tetherAccel(0, x1, x2, eta, length_dot, fn);
+            [a2, da_dp2] = coa.orbit.tetherAccel(0, x1, x2, eta, length_dot, fn);
+            [a3, da_dp3, ~] = coa.orbit.tetherAccel(0, x1, x2, eta, length_dot, fn);
             tc.verifyEqual(a2, a1);
             tc.verifyEqual(a3, a1);
             tc.verifyEqual(da_dp3, da_dp2);
@@ -83,12 +88,12 @@ classdef TetherAccelTest < matlab.unittest.TestCase
         function matchesLinearSystemSolve(tc, states, eta, length_dot)
             % Solve the 7x7 system of Sec. 2.3 directly and compare.
             [x1, x2, fn] = unpackInputs(states);
-            a = coa.orbit.tetherAccel(x1, x2, eta, length_dot, fn);
+            a = coa.orbit.tetherAccel(0, x1, x2, eta, length_dot, fn);
 
             d = x2(1:3) - x1(1:3);
             d_dot = x2(4:6) - x1(4:6);
-            a1_free = fn(x1);
-            a2_free = fn(x2);
+            a1_free = fn(0, x1);
+            a2_free = fn(0, x2);
             A = [(1 - eta) * eye(3), zeros(3), 2 * d; ...
                  zeros(3), eta * eye(3), -2 * d; ...
                  -2 * d', 2 * d', 0];
@@ -100,7 +105,7 @@ classdef TetherAccelTest < matlab.unittest.TestCase
 
         function satisfiesAccelerationLevelConstraint(tc, states, eta, length_dot)
             [x1, x2, fn] = unpackInputs(states);
-            a = coa.orbit.tetherAccel(x1, x2, eta, length_dot, fn);
+            a = coa.orbit.tetherAccel(0, x1, x2, eta, length_dot, fn);
             d = x2(1:3) - x1(1:3);
             d_dot = x2(4:6) - x1(4:6);
             tc.verifyEqual(d' * (a(4:6) - a(1:3)), length_dot^2 - d_dot' * d_dot, ...
@@ -111,8 +116,8 @@ classdef TetherAccelTest < matlab.unittest.TestCase
             % The constraint force acts along the tether with equal and
             % opposite impulse, so the mass-weighted acceleration is unchanged.
             [x1, x2, fn] = unpackInputs(states);
-            a = coa.orbit.tetherAccel(x1, x2, eta, length_dot, fn);
-            free = (1 - eta) * fn(x1) + eta * fn(x2);
+            a = coa.orbit.tetherAccel(0, x1, x2, eta, length_dot, fn);
+            free = (1 - eta) * fn(0, x1) + eta * fn(0, x2);
             tc.verifyEqual((1 - eta) * a(1:3) + eta * a(4:6), free, "AbsTol", 1e-12);
         end
 
@@ -120,10 +125,11 @@ classdef TetherAccelTest < matlab.unittest.TestCase
 
         function partialsMatchCentralDifference(tc, states, eta, length_dot)
             [x1, x2, fn] = unpackInputs(states);
-            [~, da_dp, da_dv] = coa.orbit.tetherAccel(x1, x2, eta, length_dot, fn);
+            [~, da_dp, da_dv] = coa.orbit.tetherAccel(0, x1, x2, eta, length_dot, fn);
 
             z = [x1(1:3); x2(1:3); x1(4:6); x2(4:6)];
-            accel = @(z) coa.orbit.tetherAccel([z(1:3); z(7:9)], [z(4:6); z(10:12)], ...
+            accel = @(z) coa.orbit.tetherAccel(0, [z(1:3); z(7:9)], ...
+                                               [z(4:6); z(10:12)], ...
                                                eta, length_dot, fn);
             jacobian_fd = centralDifferenceJacobian(accel, z);
 
@@ -136,10 +142,11 @@ classdef TetherAccelTest < matlab.unittest.TestCase
             fn = @genericAccel;
             x1 = [0.3; 0.2; 0.1; 0.01; -0.03; 0.04];
             x2 = [0.9; -0.1; 0.4; -0.02; 0.05; 0.1];
-            [~, da_dp, da_dv] = coa.orbit.tetherAccel(x1, x2, eta, length_dot, fn);
+            [~, da_dp, da_dv] = coa.orbit.tetherAccel(0, x1, x2, eta, length_dot, fn);
 
             z = [x1(1:3); x2(1:3); x1(4:6); x2(4:6)];
-            accel = @(z) coa.orbit.tetherAccel([z(1:3); z(7:9)], [z(4:6); z(10:12)], ...
+            accel = @(z) coa.orbit.tetherAccel(0, [z(1:3); z(7:9)], ...
+                                               [z(4:6); z(10:12)], ...
                                                eta, length_dot, fn);
             jacobian_fd = centralDifferenceJacobian(accel, z);
 
@@ -153,13 +160,13 @@ end
 function [x1, x2, fn] = defaultInputs()
     x1 = [0.3; 0.2; 0.1; 0.01; -0.03; 0.04];
     x2 = [0.35; 0.1; 0.15; -0.02; 0.05; 0.0];
-    fn = @(x) coa.orbit.cr3bp(x, 0.0121505856);
+    fn = @(~, x) coa.orbit.cr3bp(x, 0.0121505856);
 end
 
 function [x1, x2, fn] = unpackInputs(states)
     x1 = states{1};
     x2 = states{2};
-    fn = @(x) coa.orbit.cr3bp(x, 0.0121505856);
+    fn = @(~, x) coa.orbit.cr3bp(x, 0.0121505856);
 end
 
 function jacobian_fd = centralDifferenceJacobian(f, x)
@@ -173,7 +180,7 @@ function jacobian_fd = centralDifferenceJacobian(f, x)
     end
 end
 
-function [a, da_dp, da_dv] = genericAccel(x)
+function [a, da_dp, da_dv] = genericAccel(~, x)
     % Arbitrary smooth acceleration with closed-form partials.
     p = x(1:3);
     v = x(4:6);
@@ -191,5 +198,5 @@ function [a, da_dp, da_dv] = genericAccel(x)
 end
 
 function requestFour(x1, x2, fn)
-    [~, ~, ~, ~] = coa.orbit.tetherAccel(x1, x2, 0.3, 0.1, fn);
+    [~, ~, ~, ~] = coa.orbit.tetherAccel(0, x1, x2, 0.3, 0.1, fn);
 end

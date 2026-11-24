@@ -51,17 +51,16 @@ function packed_derivative = tetheredThreeBodyEkfPropagation(normalized_time, ..
     %   and bodies 1-2.
     %
     %   Inputs:
-    %     normalized_time     Nondimensional time. Unused for the rigid tether
-    %                         (accel_fn and the process-noise PSDs are assumed
-    %                         time-invariant); sets L(t) for the spring-damper.
+    %     normalized_time     Nondimensional time passed to accel_fn; also
+    %                         sets L(t) for the spring-damper.
     %     packed_state        18x1 or 342x1 column vector, described above.
     %     mass_2_fraction     eta = m2 / (m1 + m2); body 1 has mass fraction
     %                         1 - eta.
     %     tether_length_rate  Prescribed rate of change of |p2 - p1|, in
     %                         nondimensional units.
     %     accel_fn            Single-body acceleration following the
-    %                         coa.orbit.cr3bp convention,
-    %                         [a, da_dp, da_dv] = accel_fn(state), with state
+    %                         convention [a, da_dp, da_dv] =
+    %                         accel_fn(normalized_time, state), with state
     %                         6x1 [position; velocity]. The Jacobians are
     %                         requested only when propagating covariance.
     %     process_noise       Scalar struct of constant spectral densities
@@ -107,7 +106,7 @@ function packed_derivative = tetheredThreeBodyEkfPropagation(normalized_time, ..
     state_2 = [position_2; velocity_2];  % Catch mechanism
     state_3 = [position_3; velocity_3];  % External payload
 
-    %% State propagation: x_dot = f(x)
+    %% State propagation: x_dot = f(t, x)
     % Acceleration Jacobians are only evaluated when covariance is propagated.
     if propagate_covariance
         if use_spring_damper
@@ -121,12 +120,12 @@ function packed_derivative = tetheredThreeBodyEkfPropagation(normalized_time, ..
             [tether_acceleration, ...
              tether_acceleration_position_jacobian, ...
              tether_acceleration_velocity_jacobian] = ...
-                coa.orbit.tetherAccel(state_1, state_2, mass_2_fraction, ...
-                                      tether_length_rate, accel_fn);
+                coa.orbit.tetherAccel(normalized_time, state_1, state_2, ...
+                                      mass_2_fraction, tether_length_rate, accel_fn);
         end
         [acceleration_3, ...
          body_3_acceleration_position_jacobian, ...
-         body_3_acceleration_velocity_jacobian] = accel_fn(state_3);
+         body_3_acceleration_velocity_jacobian] = accel_fn(normalized_time, state_3);
     else
         if use_spring_damper
             tether_acceleration = ...
@@ -134,12 +133,11 @@ function packed_derivative = tetheredThreeBodyEkfPropagation(normalized_time, ..
                                                   state_2, mass_2_fraction, ...
                                                   spring_args{:}, accel_fn);
         else
-            tether_acceleration = coa.orbit.tetherAccel(state_1, state_2, ...
-                                                        mass_2_fraction, ...
-                                                        tether_length_rate, ...
-                                                        accel_fn);
+            tether_acceleration = ...
+                coa.orbit.tetherAccel(normalized_time, state_1, state_2, ...
+                                      mass_2_fraction, tether_length_rate, accel_fn);
         end
-        acceleration_3 = accel_fn(state_3);
+        acceleration_3 = accel_fn(normalized_time, state_3);
     end
 
     state_derivative = [velocity_1; velocity_2; velocity_3; ...
@@ -150,7 +148,7 @@ function packed_derivative = tetheredThreeBodyEkfPropagation(normalized_time, ..
         return
     end
 
-    %% Linearized dynamics: F = df/dx
+    %% Linearized dynamics: F = df/dx at fixed time
     % With x = [positions; velocities], F = [0, I; da/dp, da/dv]. Bodies 1-2
     % are coupled through the tether; body 3 is decoupled from them.
     acceleration_position_jacobian = ...

@@ -78,7 +78,7 @@ function problem = makeProblem(config)
     % Nondimensional constants shared by every integration.
     problem.eta = config.mass_2_fraction;
     problem.length = config.tether_length_km / config.length_scale;
-    problem.accel_fn = @(x) coa.orbit.cr3bp(x, config.mu);
+    problem.accel_fn = @(~, x) coa.orbit.cr3bp(x, config.mu);
     problem.spin_rate = config.spin_rate * config.time_scale;
 
     problem.rate_scale = 1e-3 * config.time_scale / config.length_scale;

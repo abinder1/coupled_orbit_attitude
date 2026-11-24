@@ -7,7 +7,7 @@ classdef Scenario
         function [state, covariance, factor] = makeInitialEstimate(config)
             % Initialize the tethered bodies, rendezvous payload, and covariance.
             import tetherFilterDemoSupport.*
-            accel_fn = @(x) coa.orbit.cr3bp(x, config.mu);
+            accel_fn = @(~, x) coa.orbit.cr3bp(x, config.mu);
 
             tether_length = config.tether_length_km / config.length_scale;
             spin_rate = config.spin_rate * config.time_scale;
@@ -89,7 +89,7 @@ classdef Scenario
 
         function state = propagateSingleBody(state_0, duration, accel_fn)
             % Coast a single body [p; v]; negative duration propagates backward.
-            rhs = @(~, x) [x(4:6); accel_fn(x)];
+            rhs = @(t, x) [x(4:6); accel_fn(t, x)];
             solution = ode113(rhs, [0, duration], state_0, ...
                               odeset('AbsTol', 1e-10, 'RelTol', 1e-10));
             state = solution.y(:, end);
@@ -101,7 +101,7 @@ classdef Scenario
 
         function rhs = cr3bpDynamicsFunction(config, process_noise)
             % Construct the CR3BP tether RHS for truth or filter propagation.
-            accel_fn = @(x) coa.orbit.cr3bp(x, config.mu);
+            accel_fn = @(~, x) coa.orbit.cr3bp(x, config.mu);
             args = {config.mass_2_fraction, config.tether_length_rate, accel_fn, ...
                     process_noise, config.spring_damper};
             rhs = @(t, x) coa.orbit.tetheredThreeBodyEkfPropagation(t, x, args{:});

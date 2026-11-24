@@ -1,19 +1,20 @@
 % Copyright (c) 2026 Andrew Binder
 
-function [a, da_dp, da_dv] = tetherAccel(x1, x2, eta, length_dot, accel_fn)
+function [a, da_dp, da_dv] = tetherAccel(t, x1, x2, eta, length_dot, accel_fn)
     % TETHERACCEL Accelerations of two masses held at a prescribed separation.
-    %   a = coa.orbit.tetherAccel(x1, x2, eta, length_dot, accel_fn) returns
+    %   a = coa.orbit.tetherAccel(t, x1, x2, eta, length_dot, accel_fn) returns
     %   the stacked 6x1 constrained accelerations [a1; a2] of two masses with
     %   states x1 = [p1; v1] and x2 = [p2; v2]. eta = m2 / (m1 + m2), and
     %   length_dot is the rate of change of |p2 - p1|. accel_fn evaluates the
-    %   unconstrained acceleration of a single mass and must follow the
-    %   coa.orbit.cr3bp convention, [a, da_dp, da_dv] = accel_fn(x), for
-    %   example @(x) coa.orbit.cr3bp(x, mu). Implements Secs. 2.4 and 3 of
-    %   derivations/lagrangian_based.tex.
+    %   unconstrained acceleration of a single mass at the current time t:
+    %   [a, da_dp, da_dv] = accel_fn(t, x). For CR3BP, use
+    %   @(~, x) coa.orbit.cr3bp(x, mu).
+    %   Implements Secs. 2.4 and 3 of derivations/lagrangian_based.tex.
     %
     %   [a, da_dp, da_dv] = coa.orbit.tetherAccel(...) also returns the 6x6
     %   partials of [a1; a2] with respect to [p1; p2] and [v1; v2].
     arguments
+        t (1, 1) double {mustBeFinite}
         x1 (6, 1) double
         x2 (6, 1) double
         eta (1, 1) double
@@ -27,11 +28,11 @@ function [a, da_dp, da_dv] = tetherAccel(x1, x2, eta, length_dot, accel_fn)
     v2 = x2(4:6);
 
     if nargout > 1
-        [a1, a1_dp, a1_dv] = accel_fn(x1);
-        [a2, a2_dp, a2_dv] = accel_fn(x2);
+        [a1, a1_dp, a1_dv] = accel_fn(t, x1);
+        [a2, a2_dp, a2_dv] = accel_fn(t, x2);
     else
-        a1 = accel_fn(x1);
-        a2 = accel_fn(x2);
+        a1 = accel_fn(t, x1);
+        a2 = accel_fn(t, x2);
     end
 
     d = p2 - p1;

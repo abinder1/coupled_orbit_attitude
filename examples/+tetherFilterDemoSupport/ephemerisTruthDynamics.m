@@ -19,7 +19,7 @@ function derivative = ephemerisTruthDynamics(tau, state, config, parameters)
         parameters (1, 1) struct
     end
 
-    accel_fn = @(body_state) ephemerisAcceleration(tau, body_state, parameters);
+    accel_fn = @(t, body_state) ephemerisAcceleration(t, body_state, parameters);
     propagate = @coa.orbit.tetheredThreeBodyEkfPropagation;
     derivative = propagate(tau, state, config.mass_2_fraction, ...
                            config.tether_length_rate, accel_fn, struct(), ...

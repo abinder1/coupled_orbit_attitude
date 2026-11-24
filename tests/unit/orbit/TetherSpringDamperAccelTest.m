@@ -29,9 +29,9 @@ classdef TetherSpringDamperAccelTest < matlab.unittest.TestCase
         function matchesRigidConstraintWhenOnReference(tc, eta)
             % Zero gains, correct length, rate and spin: identical to tetherAccel.
             [x1, x2] = spinningPair(2, 0.7, 0.4);
-            fn = @(x) -x(1:3);
+            fn = @(~, x) -x(1:3);
             length = 2;
-            expected = coa.orbit.tetherAccel(x1, x2, eta, 0, fn);
+            expected = coa.orbit.tetherAccel(0, x1, x2, eta, 0, fn);
             actual = coa.orbit.tetherSpringDamperAccel(0, x1, x2, eta, length, ...
                                                        0, 0, 0, fn);
             tc.verifyEqual(actual, expected, 'AbsTol', 1e-12);
@@ -42,7 +42,7 @@ classdef TetherSpringDamperAccelTest < matlab.unittest.TestCase
             x2(1:3) = x2(1:3) * 1.1;
             a = coa.orbit.tetherSpringDamperAccel(0.3, x1, x2, eta, 0.5, 0.01, ...
                                                   3, 2, fn);
-            free = [fn(x1); fn(x2)];
+            free = [fn(0.3, x1); fn(0.3, x2)];
             tc.verifyEqual((1 - eta) * a(1:3) + eta * a(4:6), ...
                            (1 - eta) * free(1:3) + eta * free(4:6), ...
                            'AbsTol', 1e-12);
@@ -128,7 +128,7 @@ end
 function [x1, x2, fn] = jacobianInputs()
     x1 = [0.6; 0.1; 0.12; 0.02; 0.24; 0.01];
     x2 = [0.67; 0.04; 0.17; 0.03; 0.2; 0.02];
-    fn = @(x) coa.orbit.cr3bp(x, 0.0121);
+    fn = @(~, x) coa.orbit.cr3bp(x, 0.0121);
 end
 
 function [da_dp, da_dv] = finiteDifferenceJacobians(x1, x2, args)
@@ -152,11 +152,11 @@ function a = stackedAccel(x, args)
     a = coa.orbit.tetherSpringDamperAccel(0.2, x(1:6), x(7:12), args{:});
 end
 
-function a = freeSpace(~)
+function a = freeSpace(~, ~)
     a = zeros(3, 1);
 end
 
-function [a, da_dp, da_dv] = freeSpaceWithJacobians(~)
+function [a, da_dp, da_dv] = freeSpaceWithJacobians(~, ~)
     a = zeros(3, 1);
     da_dp = zeros(3);
     da_dv = zeros(3);
@@ -183,5 +183,5 @@ end
 function [x1, x2, fn] = defaultInputs()
     x1 = [0.3; 0.2; 0.1; 0.01; -0.03; 0.04];
     x2 = [0.35; 0.1; 0.15; -0.02; 0.05; 0.0];
-    fn = @(x) -x(1:3);
+    fn = @(~, x) -x(1:3);
 end

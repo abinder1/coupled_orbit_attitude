@@ -128,7 +128,7 @@ process_noise = struct('tension_psd', 1e-8, ...
 no_process_noise = structfun(@(~) 0, process_noise, 'UniformOutput', false);
 
 % Free-body dynamics: [a, da_dp, da_dv] = cr3bp(state, mu), state = [p; v]
-accel_fn = @(state) coa.orbit.cr3bp(state, mu);
+accel_fn = @(~, state) coa.orbit.cr3bp(state, mu);
 
 % Short alias for the propagator (keeps the ODE wrappers within 88 columns)
 propagate = @coa.orbit.tetheredThreeBodyEkfPropagation;
@@ -966,7 +966,7 @@ end
 function state = propagateSingleBody(state_0, duration, accel_fn)
     % Coast a single body [p; v] under accel_fn for 'duration' (nondimensional;
     % negative propagates backward) and return the final [p; v].
-    rhs = @(~, x) [x(4:6); accel_fn(x)];
+    rhs = @(t, x) [x(4:6); accel_fn(t, x)];
     sol = ode113(rhs, [0, duration], state_0, ...
                  odeset('AbsTol', 1e-10, 'RelTol', 1e-10));
     state = sol.y(:, end);

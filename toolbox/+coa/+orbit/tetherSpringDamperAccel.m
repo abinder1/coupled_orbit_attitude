@@ -26,7 +26,7 @@ function [a, da_dp, da_dv, tension] = tetherSpringDamperAccel(t, x1, x2, eta, ..
     %   [a, da_dp, da_dv] = coa.orbit.tetherSpringDamperAccel(...) also returns
     %   the 6x6 partials of [a1; a2] with respect to [p1; p2] and [v1; v2], in
     %   the same layout as coa.orbit.tetherAccel. accel_fn must then return its
-    %   own Jacobians, [a, da_dp, da_dv] = accel_fn(x). Unlike tetherAccel, the
+    %   own Jacobians, [a, da_dp, da_dv] = accel_fn(t, x). Unlike tetherAccel, the
     %   length rate is the measured |d|-dot rather than the constant length_dot,
     %   so the Jacobian is exact for the off-constraint states this model allows.
     %
@@ -45,7 +45,7 @@ function [a, da_dp, da_dv, tension] = tetherSpringDamperAccel(t, x1, x2, eta, ..
     %     stiffness       k >= 0, length-error gain in 1/time^2 (k = wn^2).
     %     damping         c >= 0, rate-error gain in 1/time (c = 2 * zeta * wn).
     %     accel_fn        function handle returning the unconstrained acceleration
-    %                     of one mass, a = accel_fn(x), as for coa.orbit.cr3bp.
+    %                     of one mass, a = accel_fn(t, x), at the current time t.
     %
     %   Notes:
     %     - The gains act on the relative coordinate, so they do not depend on
@@ -81,11 +81,11 @@ function [a, da_dp, da_dv, tension] = tetherSpringDamperAccel(t, x1, x2, eta, ..
     centripetal = (dot(d_dot, d_dot) - length_rate^2) / length;
 
     if nargout > 1
-        [a1, a1_dp, a1_dv] = accel_fn(x1);
-        [a2, a2_dp, a2_dv] = accel_fn(x2);
+        [a1, a1_dp, a1_dv] = accel_fn(t, x1);
+        [a2, a2_dp, a2_dv] = accel_fn(t, x2);
     else
-        a1 = accel_fn(x1);
-        a2 = accel_fn(x2);
+        a1 = accel_fn(t, x1);
+        a2 = accel_fn(t, x2);
     end
 
     % L_ddot = e . d_ddot + centripetal, with d_ddot = (a2 - a1) - tension * e.
