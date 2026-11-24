@@ -7,8 +7,6 @@ classdef Scenario
         function [state, covariance, factor] = makeInitialEstimate(config)
             % Initialize the tethered bodies, rendezvous payload, and covariance.
             import tetherFilterDemoSupport.*
-            accel_fn = @(~, x) coa.orbit.cr3bp(x, config.mu);
-
             tether_length = config.tether_length_km / config.length_scale;
             spin_rate = config.spin_rate * config.time_scale;
             tether_rate = config.tether_length_rate;
@@ -18,7 +16,7 @@ classdef Scenario
                                                         spin_rate, ...
                                                         tether_rate, ...
                                                         config.tether_direction);
-            state = Scenario.rendezvousInitialState(tether_state, config, accel_fn);
+            state = Scenario.rendezvousInitialState(tether_state, config);
 
             sigma = config.initial_sigma;
             for field = ["com_position", "relative_position", "payload_position"]
@@ -32,7 +30,7 @@ classdef Scenario
                 coa.filter.tetherInitialCovariance(config.mass_2_fraction, sigma);
         end
 
-        function state = rendezvousInitialState(tether_state, config, accel_fn)
+        function state = rendezvousInitialState(tether_state, config)
             % Back-propagate the catch mechanism to initialize a rendezvous payload.
             import tetherFilterDemoSupport.*
             duration = config.duration;
@@ -43,11 +41,16 @@ classdef Scenario
                                  tether_state(7:12); tether_state(10:12)];
             tether_solution = ode113(tether_rhs, [0, duration], placeholder_state, ...
                                      odeset('RelTol', 1e-10, 'AbsTol', 1e-12));
+            if tether_solution.x(end) ~= duration
+                error('tetherFilterDemoSupport:Scenario:TetherIncomplete', ...
+                      'Tether propagation did not reach the rendezvous time.');
+            end
             final_tether_state = tether_solution.y(:, end);
 
             catch_state = [final_tether_state(4:6); final_tether_state(13:15)];
-            payload_state = Scenario.propagateSingleBody(catch_state, -duration, ...
-                                                         accel_fn);
+            payload_rhs = Scenario.singleBodyTruthFunction(config);
+            payload_state = Scenario.propagateSingleBody(catch_state, [duration, 0], ...
+                                                         payload_rhs);
 
             % Reorder [p1; p2; v1; v2; p3; v3] as [p1; p2; p3; v1; v2; v3].
             combined_state = [tether_state; payload_state];
@@ -62,6 +65,10 @@ classdef Scenario
                 ode113(Scenario.truthDynamicsFunction(config), ...
                        [0, config.duration], initial_state, ...
                        odeset('RelTol', 1e-10, 'AbsTol', 1e-12));
+            if scenario.truth_solution.x(end) ~= config.duration
+                error('tetherFilterDemoSupport:Scenario:IncompleteTruthPropagation', ...
+                      'Truth propagation did not reach the scenario end time.');
+            end
         end
 
         function rhs = truthDynamicsFunction(config)
@@ -70,6 +77,23 @@ classdef Scenario
             switch config.truth_model
                 case "cr3bp"
                     rhs = Scenario.cr3bpDynamicsFunction(config, struct());
+                case "ephemeris"
+                    parameters = config.ephemeris_parameters;
+                    rhs = @(t, x) ephemerisTruthDynamics(t, x, config, parameters);
+                otherwise
+                    error('tetherFilterDemoSupport:Scenario:UnknownTruthModel', ...
+                          'Unknown truth model: %s.', config.truth_model);
+            end
+        end
+
+        function rhs = singleBodyTruthFunction(config)
+            % Select the single-body truth model for rendezvous initialization.
+            switch config.truth_model
+                case "cr3bp"
+                    rhs = @(~, x) [x(4:6); coa.orbit.cr3bp(x, config.mu)];
+                case "ephemeris"
+                    parameters = config.ephemeris_parameters;
+                    rhs = @(t, x) emframe.embRotatingDerivative(t, x, parameters);
                 otherwise
                     error('tetherFilterDemoSupport:Scenario:UnknownTruthModel', ...
                           'Unknown truth model: %s.', config.truth_model);
@@ -87,11 +111,14 @@ classdef Scenario
             state = initial_state + initial_factor * randn(18, 1);
         end
 
-        function state = propagateSingleBody(state_0, duration, accel_fn)
-            % Coast a single body [p; v]; negative duration propagates backward.
-            rhs = @(t, x) [x(4:6); accel_fn(t, x)];
-            solution = ode113(rhs, [0, duration], state_0, ...
+        function state = propagateSingleBody(state_0, time_span, rhs)
+            % Coast [p; v] between the specified absolute scenario times.
+            solution = ode113(rhs, time_span, state_0, ...
                               odeset('AbsTol', 1e-10, 'RelTol', 1e-10));
+            if solution.x(end) ~= time_span(end)
+                error('tetherFilterDemoSupport:Scenario:PayloadIncomplete', ...
+                      'Payload propagation did not reach the requested time.');
+            end
             state = solution.y(:, end);
         end
 

@@ -108,6 +108,64 @@ classdef TetherFilterDemoEphemerisTruthTest < matlab.unittest.TestCase
             tc.verifyError(rhs, 'emframe:validation:PreparedOutOfCoverage');
         end
 
+        function scenarioSelectsEphemerisOnlyForTruth(tc)
+            import tetherFilterDemoSupport.*
+            [parameters, config, state] = inputs();
+            config.truth_model = "ephemeris";
+            config.ephemeris_parameters = parameters;
+            config.mu = 0.012150585;
+            noise = struct('tension_psd', 1e-6, 'transverse_psd', 1e-8, ...
+                           'body_3_acceleration_psd', 1e-8);
+            truth_rhs = Scenario.truthDynamicsFunction(config);
+            filter_rhs = Scenario.filterDynamicsFunction(config, noise);
+            cr3bp_rhs = Scenario.cr3bpDynamicsFunction(config, noise);
+            expected_truth = ephemerisTruthDynamics(0.12, state, config, parameters);
+            packed = [state; zeros(324, 1)];
+
+            tc.verifyEqual(truth_rhs(0.12, state), expected_truth, 'AbsTol', 0);
+            tc.verifyEqual(filter_rhs(0.12, packed), cr3bp_rhs(0.12, packed), ...
+                           'AbsTol', 0);
+        end
+
+        function rendezvousUsesAbsoluteEphemerisTime(tc)
+            import tetherFilterDemoSupport.*
+            [parameters, config, state] = inputs();
+            config.truth_model = "ephemeris";
+            config.ephemeris_parameters = parameters;
+            config.duration = 0.03;
+            tether_state = state([1:6, 10:15]);
+            initial = Scenario.rendezvousInitialState(tether_state, config);
+            truth_rhs = Scenario.truthDynamicsFunction(config);
+            truth = ode113(truth_rhs, [0, config.duration], initial, ...
+                           odeset('RelTol', 1e-10, 'AbsTol', 1e-12));
+            final = truth.y(:, end);
+
+            tc.verifyEqual(initial([1:6, 10:15]), tether_state, 'AbsTol', 0);
+            tc.verifyEqual(final(7:9), final(4:6), 'AbsTol', 1e-8);
+            tc.verifyEqual(final(16:18), final(13:15), 'AbsTol', 1e-8);
+        end
+
+        function cr3bpRendezvousMatchesPreviousTimeConvention(tc)
+            import tetherFilterDemoSupport.*
+            [~, config, state] = inputs();
+            config.truth_model = "cr3bp";
+            config.mu = 0.012150585;
+            config.duration = 0.03;
+            tether_state = state([1:6, 10:15]);
+            initial = Scenario.rendezvousInitialState(tether_state, config);
+            truth_rhs = Scenario.truthDynamicsFunction(config);
+            truth = ode113(truth_rhs, [0, config.duration], initial, ...
+                           odeset('RelTol', 1e-10, 'AbsTol', 1e-12));
+            final = truth.y(:, end);
+            catch_state = [final(4:6); final(13:15)];
+            old_rhs = @(~, x) [x(4:6); coa.orbit.cr3bp(x, config.mu)];
+            old_solution = ode113(old_rhs, [0, -config.duration], catch_state, ...
+                                  odeset('AbsTol', 1e-10, 'RelTol', 1e-10));
+
+            tc.verifyEqual(initial([7:9, 16:18]), old_solution.y(:, end), ...
+                           'AbsTol', 1e-9);
+        end
+
     end
 end
 
