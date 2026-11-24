@@ -6,9 +6,11 @@
 %   implemented measurement groups. The last update occurs a configurable
 %   margin before the end of the scenario (the payload rendezvous).
 %
-%   State convention (nondimensional, CR3BP rotating frame):
+%   State convention (nondimensional rotating frame):
 %     x = [p1; p2; p3; v1; v2; v3], with each block 3x1.
 %     Body 1 = counterweight, 2 = catch mechanism, 3 = payload.
+%   Ephemeris truth and the CR3BP filter use the instantaneous Earth-Moon
+%   rotating axes with fixed scaling. With CR3BP truth, both use CR3BP axes.
 %   The tether truth and EKF use the critically damped spring-damper model;
 %   process noise is included in covariance propagation, but not simulated as
 %   a random realization in the truth trajectory. Measurement updates use an
@@ -30,6 +32,10 @@ import tetherFilterDemoSupport.*
 rng(1, 'twister');
 
 config = demoConfig();
+if config.truth_model == "ephemeris"
+    local_config = fullfile(example_folder, 'ephemeris-truth-config.json');
+    config.ephemeris_parameters = Ephemeris.loadParameters(config, local_config);
+end
 PlotOutput.preparePlotOutput(config);
 
 %% Initialize and propagate the shared truth
@@ -57,13 +63,14 @@ Analysis.runMonteCarloAnalyses(Analysis.monteCarloAnalyses(), monte_carlo, confi
 %% Scenario configuration
 function config = demoConfig()
     % Physical, numerical, and plotting parameters for this example.
-    config.truth_model = "cr3bp";
+    config.truth_model = "ephemeris";          % "ephemeris" or "cr3bp"
+    config.ephemeris_start_et = 850243598.7593319; % 2026-12-11 apogee, ET/TDB [s]
     config.length_scale = 384400;            % Earth-Moon length unit [km]
     config.time_scale = 375190.258892627;     % Earth-Moon time unit [s]
     config.mu = 0.012150585;                  % Moon's mass fraction
 
     config.tether_length_km = 200;
-    config.spin_rate = 2 * pi / (55 * 60);    % Inertial rate [rad/s]
+    config.spin_rate = 2 * pi / (55 * 60);    % Initial inertial rate [rad/s]
     config.mass_2_fraction = 0.5;
     config.tether_length_rate = 0;
     config.tether_direction = [1; 0; 0];

@@ -16,6 +16,15 @@ classdef Scenario
                                                         spin_rate, ...
                                                         tether_rate, ...
                                                         config.tether_direction);
+            if config.truth_model == "ephemeris"
+                moon = config.ephemeris_parameters.ephemeris.moon(0);
+                [~, frame_rate] = emframe.orbit.earthMoonFrameKinematics(moon);
+                separation = tether_state(4:6) - tether_state(1:3);
+                correction = cross([0; 0; 1] - frame_rate, separation);
+                eta = config.mass_2_fraction;
+                tether_state(7:9) = tether_state(7:9) - eta * correction;
+                tether_state(10:12) = tether_state(10:12) + (1 - eta) * correction;
+            end
             state = Scenario.rendezvousInitialState(tether_state, config);
 
             sigma = config.initial_sigma;

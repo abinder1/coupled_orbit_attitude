@@ -166,7 +166,108 @@ classdef TetherFilterDemoEphemerisTruthTest < matlab.unittest.TestCase
                            'AbsTol', 1e-9);
         end
 
+        function preparesScaledDefaultForceFromDeConstants(tc)
+            import tetherFilterDemoSupport.*
+            fixture = refinementPointwiseInputs();
+            data = addDeConstants(fixture);
+            config = struct('ephemeris_start_et', 0, 'duration_s', 86400, ...
+                            'length_scale', 384400, 'time_scale', 375190.258892627);
+            parameters = Ephemeris.prepareParameters(config, data);
+            force = emframe.internal.makeForceModel(fixture.constants);
+            scales = struct('length', config.length_scale, 'time', config.time_scale);
+            reference = emframe.prepareScaledDynamics(data, [0, 86400], force, scales);
+            tau = 0.1;
+            state = [0.6; 0.1; 0.12; 0.02; 0.24; 0.01];
+            actual = emframe.embRotatingDerivative(tau, state, parameters);
+            expected = emframe.embRotatingDerivative(tau, state, reference);
+
+            tc.verifyEqual(actual, expected, 'RelTol', 1e-12, 'AbsTol', 1e-12);
+            tc.verifyError(@() parameters.ephemeris.moon(-0.01), ...
+                           'emframe:validation:PreparedOutOfCoverage');
+            tc.verifyError(@() parameters.ephemeris.moon(86400 / config.time_scale + ...
+                                                         1e-6), ...
+                           'emframe:validation:PreparedOutOfCoverage');
+
+            data.constantNames = data.constantNames(2:end);
+            data.constantValues = data.constantValues(2:end);
+            tc.verifyError(@() Ephemeris.prepareParameters(config, data), ...
+                           'tetherFilterDemoSupport:Ephemeris:MissingConstant');
+        end
+
+        function initialTetherSpinUsesActualFrameRate(tc)
+            import tetherFilterDemoSupport.*
+            [parameters, config, ~] = inputs();
+            config.truth_model = "ephemeris";
+            config.ephemeris_parameters = parameters;
+            config.length_scale = 384400;
+            config.time_scale = 375190.258892627;
+            config.tether_length_km = 200;
+            config.spin_rate = 2 * pi / (55 * 60);
+            config.tether_direction = [1; 2; 3] / sqrt(14);
+            config.tether_length_rate = 0.001;
+            config.halo_state = [0.6; 0.1; 0.12; 0.02; 0.24; 0.01];
+            config.duration = 0.003;
+            config.initial_sigma = struct('com_position', 100, 'com_velocity', 1, ...
+                                          'relative_position', 0.01, ...
+                                          'relative_velocity', 0.1, ...
+                                          'payload_position', 100, ...
+                                          'payload_velocity', 1);
+            initial = Scenario.makeInitialEstimate(config);
+            [~, frame_rate] = ...
+                emframe.orbit.earthMoonFrameKinematics(parameters.ephemeris.moon(0));
+            separation = initial(4:6) - initial(1:3);
+            rotating_relative_velocity = initial(13:15) - initial(10:12);
+            inertial_relative_velocity = rotating_relative_velocity + ...
+                                         cross(frame_rate, separation);
+            spin = [0; 0; config.spin_rate * config.time_scale];
+            expected = cross(spin, separation) + ...
+                       config.tether_length_rate * separation / norm(separation);
+            eta = config.mass_2_fraction;
+
+            tc.verifyEqual(inertial_relative_velocity, expected, 'AbsTol', 1e-12);
+            tc.verifyEqual((1 - eta) * initial(1:3) + eta * initial(4:6), ...
+                           config.halo_state(1:3), 'AbsTol', 1e-14);
+            tc.verifyEqual((1 - eta) * initial(10:12) + eta * initial(13:15), ...
+                           config.halo_state(4:6), 'AbsTol', 1e-14);
+            tc.verifyGreaterThan(abs(frame_rate(1)), 1e-8);
+
+            config.truth_model = "cr3bp";
+            config.mu = 0.012150585;
+            initial = Scenario.makeInitialEstimate(config);
+            initializer = @coa.orbit.tetherInitialState;
+            legacy = initializer(config.halo_state, ...
+                                 config.tether_length_km / config.length_scale, ...
+                                 eta, config.spin_rate * config.time_scale, ...
+                                 config.tether_length_rate, config.tether_direction);
+            tc.verifyEqual(initial([1:6, 10:15]), legacy, 'AbsTol', 0);
+        end
+
+        function rejectsMissingOrInvalidLocalConfig(tc)
+            import tetherFilterDemoSupport.*
+            folder = tc.applyFixture(matlab.unittest.fixtures.TemporaryFolderFixture);
+            config_path = fullfile(folder.Folder, 'config.json');
+            tc.verifyError(@() Ephemeris.loadParameters(struct(), config_path), ...
+                           'tetherFilterDemoSupport:Ephemeris:MissingConfig');
+            writelines("{}", config_path);
+            tc.verifyError(@() Ephemeris.loadParameters(struct(), config_path), ...
+                           'tetherFilterDemoSupport:Ephemeris:InvalidConfig');
+            writelines('{"EMFRAME_DE440_HEADER":"","EMFRAME_DE440_ASCII":"x"}', ...
+                       config_path);
+            tc.verifyError(@() Ephemeris.loadParameters(struct(), config_path), ...
+                           'tetherFilterDemoSupport:Ephemeris:InvalidConfig');
+        end
+
     end
+end
+
+function data = addDeConstants(fixture)
+    data = fixture.ephemeris;
+    gm = fixture.constants.gm;
+    combined_gm = [gm(1:3), gm(4) + gm(5), gm(6:11)];
+    au = 149597870.7;
+    data.constantNames = {'GMS', 'GM1', 'GM2', 'GMB', 'GM4', 'GM5', ...
+                          'GM6', 'GM7', 'GM8', 'GM9', 'AU', 'EMRAT'};
+    data.constantValues = [combined_gm * 86400^2 / au^3, au, gm(4) / gm(5)];
 end
 
 function [parameters, config, state] = inputs()

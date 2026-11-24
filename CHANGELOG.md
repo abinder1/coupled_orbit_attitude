@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+- `tetherFilterDemo` defaults to fixed-scale ephemeris truth in instantaneous
+  Earth-Moon rotating axes, with a CR3BP filter in the same axes. CR3BP truth
+  remains selectable. The ephemeris model uses the default 11 attractors and
+  solar 1PN, configured from local DE440 ASCII files. The initial tether spin
+  accounts for the instantaneous frame rate.
 - `coa.orbit.tetherAccel`, `tetherSpringDamperAccel`, and
   `tetheredThreeBodyEkfPropagation` now use acceleration callbacks with
   signature `accel_fn(time, state)`. `tetherAccel` now takes time as its
