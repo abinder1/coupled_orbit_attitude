@@ -25,6 +25,7 @@ close('all');
 example_folder = fileparts(mfilename('fullpath'));
 addpath(example_folder);
 addpath(fullfile(example_folder, '..', 'toolbox'));
+addpath(fullfile(example_folder, '..', 'external', 'ephem_integrator', 'toolbox'));
 import tetherFilterDemoSupport.*
 rng(1, 'twister');
 

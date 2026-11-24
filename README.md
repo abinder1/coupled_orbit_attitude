@@ -29,6 +29,64 @@ The build task recursively discovers unit and regression tests in `tests/`.
 To run all unit tests directly, use
 `runtests('tests/unit', 'IncludeSubfolders', true)`.
 
+## Ephemeris-truth dependency and setup
+
+The filter demo's ephemeris-truth mode uses the `emframe` library tracked as a
+Git submodule at `external/ephem_integrator`. This repository pins the exact
+library commit; initialize the submodule before running the demo.
+
+### First clone
+
+```powershell
+git clone --recurse-submodules https://github.com/abinder1/coupled_orbit_attitude.git
+Set-Location coupled_orbit_attitude
+git submodule status --recursive
+```
+
+The submodule status should show commit
+`a650b1e04dbee4eba23e2386b9fe9c97d3cb9953`.
+
+### Existing checkout
+
+From the repository root, initialize or restore the pinned submodule with:
+
+```powershell
+git submodule sync --recursive
+git submodule update --init --recursive
+git submodule status --recursive
+```
+
+Do not run `git pull` inside `external/ephem_integrator` to change the
+dependency version. To intentionally update the pin, fetch and check out the
+desired `ephem_integrator` commit in the submodule, then stage
+`external/ephem_integrator` in the parent repository and commit that gitlink
+change.
+
+### Configure local DE440 data
+
+DE440 ASCII files are not included in either repository. Copy the tracked
+template and edit its two values to point to local files:
+
+```powershell
+Copy-Item .\examples\ephemeris-truth-config.example.json `
+          .\examples\ephemeris-truth-config.json
+```
+
+Set `EMFRAME_DE440_HEADER` to the DE440 header file and
+`EMFRAME_DE440_ASCII` to its coefficient-record file. The local
+`examples/ephemeris-truth-config.json` is Git-ignored; do not commit it or the
+ephemeris data. The COA unit tests use synthetic ephemerides and do not require
+these files. The ephemeris-truth demo requires DE440 coverage of its configured
+epoch and full propagation window.
+
+### Run the filter demo
+
+From the repository root, run:
+
+```powershell
+matlab -batch "run(fullfile('examples', 'tetherFilterDemo.m'))"
+```
+
 ## Test and coverage report
 
 An interactive HTML report lets you browse test results and line coverage

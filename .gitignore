@@ -27,5 +27,7 @@ derivations/*.pdf
 
 # External documentation for the project and archive
 external/*
+!external/ephem_integrator/
 slides/
 .archive/
+examples/ephemeris-truth-config.json
