@@ -1,6 +1,13 @@
 # Changelog
 
 ## [Unreleased]
+- `derivations/paper_motivation.tex`: the study-model paragraph now follows the
+  2026-11-24 code plan (ephemeris gravity in the pulsating rotating frame, ballistic
+  L1 quasi-halo for the tether center of mass, sensors with realistic sampling, raw
+  measurement types and time-correlated noise) instead of the CR3BP halo setup.
+- `derivations/ekf_health_diagnostics.tex`: new subsection on uncertainty-weighted
+  LinCov fidelity checks (Kulik, Hastings & LeGrand 2025) and how to apply them to
+  measurement gaps, measurement models and observability-vs-nonlinearity failures.
 - `derivations/ekf_equations.tex`: the sensor table now follows
   `coa.meas.measurementModels`. Sensors are grouped and ordered by mask bit,
   with each group's bit, mask value and row count, and each sensor's stacked

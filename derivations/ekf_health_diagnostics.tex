@@ -236,6 +236,61 @@ filter may be warranted.
 Run an iterated EKF or an unscented Kalman filter on the same data. Meaningful divergence
 between their estimates indicates that linearization error is material for the problem.
 
+\subsection{Uncertainty-weighted LinCov fidelity checks}
+\label{sec:lincov_fidelity}
+\textcite{kulik2025} give cheap checks of linearized covariance propagation that are
+whitened by the input and output covariances. Let $\bm{G}$ be the Jacobian of a map
+$\bm{g}$ at the mean, $\bm{G}_2$ its second-order derivative tensor (the second-order STT
+for dynamics), and $\Pm_{z1} = \bm{G}\Pm_x\bm{G}\T$ the LinCov covariance. Against a
+reference mean and covariance $(\bm{\mu}_z, \Pm_z)$ from Monte Carlo, the unscented
+transform or a second-order expansion:
+\begin{itemize}
+  \item \textbf{SMDM:} the squared Mahalanobis distance of $\bm{\mu}_z$ from
+        $\bm{g}(\bar{\x})$ in the metric of $\Pm_{z1}$ (mean failure).
+  \item \textbf{MCR:} the extreme generalized eigenvalue of $(\Pm_{z1}, \Pm_z)$, the
+        worst-direction over- or under-estimate of the covariance (shape failure).
+  \item \textbf{ESMD:} $\operatorname{tr}(\Pm_{z1}^{-1}\Pm_z) + \mathrm{SMDM}$, equal to the
+        output dimension when LinCov is exact. It is the trace-plus-mean part of the
+        Gaussian KL divergence above, without the log-determinant term.
+  \item \textbf{W-US-SOS:} the largest whitened output norm of $\bm{G}_2[\delta\x,\delta\x]$
+        over the $1\sigma$ input ellipsoid, i.e. how many output sigmas the quadratic term
+        moves a $1\sigma$ input. A whitened, worst-case version of the second-order term
+        magnitude.
+  \item \textbf{W-US-SOLC:} the largest whitened change of the Jacobian,
+        $\Pm_{z1}^{-1/2}\,\bm{G}_2[\delta\x]\,\Pm_x^{1/2}$, over the same ellipsoid. A
+        whitened, exactly maximized replacement for the Junkins--Singla nonlinearity index.
+  \item \textbf{W-US-SADL:} the whitened 2-norm of $\bm{G} - \bm{G}_{\mathrm{SL}}$, where
+        $\bm{G}_{\mathrm{SL}} = \Pm_{xz}\T\Pm_x^{-1}$ is the unscented statistical
+        linearization. It needs no second-order partials and formalizes the EKF-vs-UKF
+        comparison.
+\end{itemize}
+The two worst-case measures are tensor Z-eigenvalue problems solved by the shifted
+higher-order power method. In the authors' NRHO test every metric degrades sharply on
+approach to perilune, and they recommend W-US-SOS and W-US-SOLC over higher-order moment
+estimates, which were slow and sometimes failed to converge.
+
+For this study:
+\begin{itemize}
+  \item Evaluate the checks over the propagation interval between measurement updates,
+        not a whole orbit. Plotting W-US-SOS against gap length, per sensor suite and catch
+        phase, gives the longest measurement gap the EKF tolerates and so a sensor-rate
+        requirement.
+  \item The checks apply to the measurement model $h$ as well. Whitening by
+        $\Sm = \Hm\Pm\Hm\T + \Rm$ asks whether measurement nonlinearity matters relative to
+        sensor noise; a low-noise sensor can be what makes linearization error important.
+  \item Run alongside the observability Gramian (Sec.~\ref{sec:observability}), they
+        separate a suite that fails through weak observability from one that fails through
+        nonlinearity.
+  \item The full second-order STT is costly at tether-plus-payload dimension. Use
+        W-US-SADL, or form $\bm{G}_2[\delta\x]$ by finite or complex-step differences of
+        the Jacobian inside the power iteration.
+  \item The paper gives no thresholds. Proposed here, not from the source: accept ESMD
+        against $\chi^2_n$ bounds as for NEES, and flag W-US-SOS $\gtrsim 0.3$ as a reason to
+        consider an iterated or unscented update.
+\end{itemize}
+The checks cover prediction only and were demonstrated on one orbit with a single, large
+initial covariance.
+
 \subsection{Iterated measurement update}
 \label{sec:iekf}
 When $\Hm$ varies appreciably over the prior uncertainty, relinearize the update about the

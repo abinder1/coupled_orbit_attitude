@@ -154,9 +154,14 @@ The second question is at least as important as the first.
 The constraints and limitations it identifies set the boundary of what a cislunar tether system can achieve, independent of how capable any particular sensor suite might be.
 
 Both questions are answered by the same study.
-The two tether terminals and the payload are modeled as point masses in the Earth--Moon circular restricted three-body problem, with the tether's center of mass on an $L_1$ halo orbit and its length constrained to vary at a constant rate.
+% Model description follows the code plan of 2026-11-24 (ephemeris dynamics in the
+% pulsating rotating frame; ballistic L1 quasi-halo; matured sensor models). Update as
+% the implementation lands.
+The two tether terminals and the payload are modeled as point masses moving under ephemeris gravity, propagated in the Earth--Moon pulsating rotating frame, with the tether's length constrained to vary at a constant rate.
+The tether's center of mass follows a ballistic trajectory near the $L_1$ halo orbit, continued from the circular restricted three-body problem into the ephemeris model, over a catch scenario of about one week to one and a half halo periods.
 All three bodies are propagated together, so that the cross-covariances between payload and tether states, which govern the relative-state distribution at the catch, are retained.
-An extended Kalman filter then processes measurements from every feasible package drawn from a list of candidate sensor models, so that the effect of each sensor, and of every interaction between sensors, is computed exactly rather than estimated from a sample.
+Each candidate sensor is modeled with a realistic sampling rate, its raw measurement type and time-correlated noise.
+An extended Kalman filter then processes measurements from every feasible package drawn from this list, so that the effect of each sensor, and of every interaction between sensors, is computed exactly rather than estimated from a sample.
 
 %%%%%%%%%%%%% Bibliography %%%%%%%%%%%%%
 \printbibliography
