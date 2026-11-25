@@ -1,6 +1,13 @@
 # Changelog
 
 ## [Unreleased]
+- `derivations/paper_motivation.tex`: the study-model paragraph now follows the
+  2026-11-24 code plan (ephemeris gravity in the pulsating rotating frame, ballistic
+  L1 quasi-halo for the tether center of mass, sensors with realistic sampling, raw
+  measurement types and time-correlated noise) instead of the CR3BP halo setup.
+- `derivations/ekf_health_diagnostics.tex`: new subsection on uncertainty-weighted
+  LinCov fidelity checks (Kulik, Hastings & LeGrand 2025) and how to apply them to
+  measurement gaps, measurement models and observability-vs-nonlinearity failures.
 - `tetherFilterDemo` defaults to fixed-scale ephemeris truth in instantaneous
   Earth-Moon rotating axes, with a CR3BP filter in the same axes. CR3BP truth
   remains selectable. The ephemeris model uses the default 11 attractors and
